@@ -35,28 +35,68 @@ program
   .option('-c, --context-file <path>', 'Path to long context file', 'assets/long-context.txt')
   .option('-o, --output <format>', 'Output format: terminal, json', 'terminal')
   .option('--output-file <path>', 'Output file path (for json output)')
-  .option('--timeout <ms>', 'Request timeout in milliseconds', '60000')
+  .option('--timeout <s>', 'Request timeout in seconds', '60')
   .option('--verbose', 'Enable verbose logging', false)
-  .option('--ramp-up-ms <ms>', 'Ramp-up period in milliseconds', '0')
+  .option('--ramp-up <s>', 'Ramp-up period in seconds', '0')
+  .option('-i, --interval <seconds>', 'Interval between snapshots in seconds', '1')
+  .option('--omit <seconds>', 'Omit initial seconds from results', '0')
   .action(async (opts) => {
     try {
       const config = parseConfig(buildArgv(opts));
 
-      console.log(`speedtest-llm v1.0.0 — mode: ${config.mode}, model: ${config.model}, threads: ${config.threads}`);
-      if (config.verbose) {
-        console.log(`  base-url: ${config.baseUrl}`);
-        console.log(`  max-tokens: ${config.maxTokens}`);
-        console.log(`  api-type: ${config.apiType}`);
-        console.log(`  output: ${config.output}`);
-      }
-      console.log(`Running speedtest...`);
-      console.log();
-
       const { executeParallel } = await import('./executor.js');
-      const result = await executeParallel(config);
 
-      const { writeOutput } = await import('./output.js');
-      writeOutput(result, config);
+      if (config.output === 'terminal') {
+        const [
+          { formatBanner, formatColumnHeaders, formatIntervalRow, formatSeparator, formatSummaryLine, formatDetailedStats },
+          { convertToHeatmapCells },
+          { renderHeatmap },
+        ] = await Promise.all([
+          import('./iperf3-formatter.js'),
+          import('./output.js'),
+          import('./heatmap-renderer.js'),
+        ]);
+
+        // Print banner and headers immediately before execution
+        console.log(formatBanner(config));
+        console.log(formatColumnHeaders());
+
+        const result = await executeParallel(config, {
+          onInterval: (snap) => console.log(formatIntervalRow(snap)),
+        });
+
+        // After execution: separator, headers, summary, stats, heatmap
+        console.log(formatSeparator());
+        console.log(formatColumnHeaders());
+        console.log(formatSummaryLine(result.aggregate, result.intervals?.length ?? 0));
+        console.log('');
+        console.log(formatDetailedStats(result.aggregate));
+
+        const heatmapCells = convertToHeatmapCells(result);
+        const heatmap = renderHeatmap(heatmapCells, 40, !!process.stdout.isTTY);
+        if (heatmap.length > 0) {
+          console.log('');
+          console.log('--- Heatmap (TPS per thread × interval) ---');
+          console.log(heatmap);
+        }
+
+        console.log('');
+        console.log('speedtest-llm Done.');
+
+        // Error display at the end
+        if (result.errors.length > 0) {
+          console.error('');
+          console.error(`Errors (${result.errors.length}):`);
+          for (const err of result.errors) {
+            console.error(`  - ${err}`);
+          }
+        }
+      } else {
+        // JSON mode: collect all results, then write JSON
+        const result = await executeParallel(config);
+        const { writeJsonOutput } = await import('./output.js');
+        writeJsonOutput(result, config);
+      }
 
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

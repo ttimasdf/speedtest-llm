@@ -58,7 +58,7 @@ export function createMetricsCollector(): MetricsCollector {
   };
 }
 
-function computeStats(values: number[]): PercentileStats {
+export function computeStats(values: number[]): PercentileStats {
   if (values.length === 0) {
     return { min: 0, max: 0, avg: 0, p50: 0, p95: 0, p99: 0 };
   }

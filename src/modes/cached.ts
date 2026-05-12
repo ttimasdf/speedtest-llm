@@ -13,6 +13,8 @@ export const cachedRunner: ModeRunner = {
     model: LanguageModel,
     metricsFactory: () => MetricsCollector,
     context: string,
+    onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+    signal?: AbortSignal,
   ): Promise<RunMetrics> {
     const prompt =
       context +
@@ -25,6 +27,7 @@ export const cachedRunner: ModeRunner = {
         messages,
         maxOutputTokens: config.maxTokens,
         maxRetries: 0,
+        abortSignal: signal,
       });
       for await (const _chunk of warmup.textStream) {}
     } catch (err) {
@@ -42,6 +45,7 @@ export const cachedRunner: ModeRunner = {
       messages,
       maxOutputTokens: config.maxTokens,
       maxRetries: 0,
+      abortSignal: signal,
     });
 
     let firstTokenRecorded = false;
@@ -50,11 +54,14 @@ export const cachedRunner: ModeRunner = {
       if (!firstTokenRecorded) {
         collector.recordFirstToken(runId);
         firstTokenRecorded = true;
+        onStream?.('first-token');
       }
+      onStream?.('chunk');
     }
 
     const usage = await result.usage;
     collector.recordChunk(runId, usage.outputTokens ?? 0);
+    onStream?.('done');
 
     return collector.finishRun(runId);
   },

@@ -10,5 +10,7 @@ export interface ModeRunner {
     model: LanguageModel,
     metricsFactory: () => MetricsCollector,
     context: string,
+    onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+    signal?: AbortSignal,
   ): Promise<RunMetrics>;
 }

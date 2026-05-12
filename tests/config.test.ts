@@ -33,7 +33,9 @@ describe('parseConfig', () => {
     expect(cfg.output).toBe('terminal');
     expect(cfg.timeout).toBe(60000);
     expect(cfg.verbose).toBe(false);
-    expect(cfg.rampUpMs).toBe(0);
+    expect(cfg.rampUp).toBe(0);
+    expect(cfg.interval).toBe(1);
+    expect(cfg.omit).toBe(0);
   });
 
   it('valid config with all args set', () => {
@@ -48,9 +50,11 @@ describe('parseConfig', () => {
       '--context-file', 'custom.txt',
       '--output', 'json',
       '--output-file', 'out.json',
-      '--timeout', '30000',
+      '--timeout', '30',
       '--verbose',
-      '--ramp-up-ms', '500',
+      '--ramp-up', '0.5',
+      '--interval', '2',
+      '--omit', '3',
     ]);
     expect(cfg.mode).toBe('prefill');
     expect(cfg.apiKey).toBe('my-key');
@@ -63,7 +67,9 @@ describe('parseConfig', () => {
     expect(cfg.output).toBe('json');
     expect(cfg.timeout).toBe(30000);
     expect(cfg.verbose).toBe(true);
-    expect(cfg.rampUpMs).toBe(500);
+    expect(cfg.rampUp).toBe(0.5);
+    expect(cfg.interval).toBe(2);
+    expect(cfg.omit).toBe(3);
   });
 
   it('invalid mode exits with error', () => {
@@ -121,6 +127,36 @@ describe('parseConfig', () => {
     mockExit();
     try {
       expect(() => parseConfig(['--mode', 'fresh', '--api-key', 'k', '--base-url', 'ftp://bad'])).toThrow('process.exit called');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      restoreExit();
+    }
+  });
+
+  it('--interval 0 rejects', () => {
+    mockExit();
+    try {
+      expect(() => parseConfig(['--mode', 'fresh', '--api-key', 'k', '--interval', '0'])).toThrow('process.exit called');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      restoreExit();
+    }
+  });
+
+  it('--interval negative rejects', () => {
+    mockExit();
+    try {
+      expect(() => parseConfig(['--mode', 'fresh', '--api-key', 'k', '--interval', '-1'])).toThrow('process.exit called');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      restoreExit();
+    }
+  });
+
+  it('--omit negative rejects', () => {
+    mockExit();
+    try {
+      expect(() => parseConfig(['--mode', 'fresh', '--api-key', 'k', '--omit', '-1'])).toThrow('process.exit called');
       expect(exitSpy).toHaveBeenCalledWith(1);
     } finally {
       restoreExit();

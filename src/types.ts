@@ -15,7 +15,9 @@ export interface SpeedTestConfig {
   readonly outputFile?: string;
   readonly timeout: number;
   readonly verbose: boolean;
-  readonly rampUpMs: number;
+  readonly rampUp: number;
+  readonly interval: number;
+  readonly omit: number;
 }
 
 export interface RunMetrics {
@@ -35,6 +37,28 @@ export interface PercentileStats {
   readonly p99: number;
 }
 
+export interface IntervalSnapshot {
+  readonly startTime: number;
+  readonly endTime: number;
+  readonly tokens: number;
+  readonly tps: number;
+  readonly threadCount: number;
+  readonly activeThreadCount: number;
+  readonly omitted: boolean;
+}
+
+export interface ThreadStreamState {
+  readonly state: 'waiting' | 'streaming' | 'done';
+  readonly tokensInInterval: number;
+}
+
+export interface HeatmapCell {
+  readonly threadIndex: number;
+  readonly intervalIndex: number;
+  readonly tps: number | null;
+  readonly isWaiting: boolean;
+}
+
 export interface AggregateMetrics {
   readonly ttft: PercentileStats;
   readonly tokensPerSecond: PercentileStats;
@@ -43,6 +67,8 @@ export interface AggregateMetrics {
   readonly threadCount: number;
   readonly successCount: number;
   readonly errorCount: number;
+  readonly intervalTps?: PercentileStats;
+  readonly totalIntervals?: number;
 }
 
 export interface SpeedTestResult {
@@ -52,4 +78,6 @@ export interface SpeedTestResult {
   readonly aggregate: AggregateMetrics;
   readonly errors: readonly string[];
   readonly timestamp: string;
+  readonly intervals?: readonly IntervalSnapshot[];
+  readonly threadStates?: readonly ThreadStreamState[][];
 }

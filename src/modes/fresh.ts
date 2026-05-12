@@ -16,6 +16,8 @@ export const freshRunner: ModeRunner = {
     model: LanguageModel,
     metricsFactory: () => MetricsCollector,
     _context: string,
+    onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+    signal?: AbortSignal,
   ): Promise<RunMetrics> {
     const collector = metricsFactory();
     const runId = collector.startRun();
@@ -27,15 +29,21 @@ export const freshRunner: ModeRunner = {
       prompt: FRESH_PROMPT,
       maxOutputTokens: config.maxTokens,
       maxRetries: 0,
+      abortSignal: signal,
       onChunk: ({ chunk }) => {
         if (!firstChunkReceived && chunk.type === 'text-delta') {
           firstChunkReceived = true;
           collector.recordFirstToken(runId);
+          onStream?.('first-token');
+        }
+        if (chunk.type === 'text-delta') {
+          onStream?.('chunk');
         }
       },
       onFinish: ({ totalUsage }) => {
         const tokens = totalUsage.outputTokens ?? 0;
         collector.recordChunk(runId, tokens);
+        onStream?.('done');
       },
     });
 

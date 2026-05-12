@@ -40,7 +40,7 @@ function makeConfig(overrides: Partial<SpeedTestConfig> = {}): SpeedTestConfig {
     output: 'terminal',
     timeout: 60000,
     verbose: false,
-    rampUpMs: 0,
+    rampUp: 0,
     ...overrides,
   };
 }

@@ -21,9 +21,11 @@ export function parseConfig(argv: string[]): SpeedTestConfig {
     .option('-c, --context-file <path>', 'Path to long context file', 'assets/long-context.txt')
     .option('-o, --output <format>', 'Output format: terminal, json', 'terminal')
     .option('--output-file <path>', 'Output file path (for json output)')
-    .option('--timeout <ms>', 'Request timeout in milliseconds', '60000')
+    .option('--timeout <s>', 'Request timeout in seconds', '60')
     .option('--verbose', 'Enable verbose logging', false)
-    .option('--ramp-up-ms <ms>', 'Ramp-up period in milliseconds', '0');
+    .option('--ramp-up <s>', 'Ramp-up period in seconds', '0')
+    .option('-i, --interval <seconds>', 'Interval between snapshots in seconds', '1')
+    .option('--omit <seconds>', 'Omit initial seconds from results', '0');
 
   program.parse(argv, { from: 'user' });
   const opts = program.opts();
@@ -74,15 +76,28 @@ export function parseConfig(argv: string[]): SpeedTestConfig {
     process.exit(1);
   }
 
-  const timeout = parseInt(opts.timeout, 10);
-  if (isNaN(timeout) || timeout < 1) {
-    console.error('Error: --timeout must be a positive integer');
+  const timeoutSec = parseFloat(opts.timeout);
+  if (isNaN(timeoutSec) || timeoutSec <= 0) {
+    console.error('Error: --timeout must be a positive number (seconds)');
+    process.exit(1);
+  }
+  const timeout = timeoutSec * 1000;
+
+  const rampUp = parseFloat(opts.rampUp);
+  if (isNaN(rampUp) || rampUp < 0) {
+    console.error('Error: --ramp-up must be a non-negative number (seconds)');
     process.exit(1);
   }
 
-  const rampUpMs = parseInt(opts.rampUpMs, 10);
-  if (isNaN(rampUpMs) || rampUpMs < 0) {
-    console.error('Error: --ramp-up-ms must be a non-negative integer');
+  const interval = parseFloat(opts.interval);
+  if (isNaN(interval) || interval <= 0) {
+    console.error('Error: --interval must be a positive number (seconds)');
+    process.exit(1);
+  }
+
+  const omit = parseFloat(opts.omit);
+  if (isNaN(omit) || omit < 0) {
+    console.error('Error: --omit must be a non-negative number (seconds)');
     process.exit(1);
   }
 
@@ -101,6 +116,8 @@ export function parseConfig(argv: string[]): SpeedTestConfig {
     outputFile: (output === 'json' && outputFile) ? outputFile : undefined,
     timeout,
     verbose: !!opts.verbose,
-    rampUpMs,
+    rampUp,
+    interval,
+    omit,
   };
 }

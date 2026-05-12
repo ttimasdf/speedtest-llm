@@ -14,6 +14,8 @@ export const prefillRunner: ModeRunner = {
     model: LanguageModel,
     metricsFactory: () => MetricsCollector,
     context: string,
+    onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+    signal?: AbortSignal,
   ): Promise<RunMetrics> {
     const prompt =
       context +
@@ -31,17 +33,21 @@ export const prefillRunner: ModeRunner = {
       messages,
       maxOutputTokens: 10,
       maxRetries: 0,
+      abortSignal: signal,
       onChunk({ chunk }) {
         if (firstChunk) {
           collector.recordFirstToken(runId);
           firstChunk = false;
+          onStream?.('first-token');
         }
         if (chunk.type === 'text-delta') {
           fullResponse += chunk.text;
+          onStream?.('chunk');
         }
       },
       onFinish({ usage }) {
         collector.recordChunk(runId, usage.outputTokens ?? 0);
+        onStream?.('done');
       },
     });
 

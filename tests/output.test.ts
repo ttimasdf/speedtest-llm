@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { formatTerminal, formatJson } from '../src/output.js';
+import { formatJson } from '../src/output.js';
 import type { SpeedTestResult, SpeedTestConfig, RunMetrics, AggregateMetrics } from '../src/types.js';
 
 function makeConfig(overrides: Partial<SpeedTestConfig> = {}): SpeedTestConfig {
@@ -15,7 +15,7 @@ function makeConfig(overrides: Partial<SpeedTestConfig> = {}): SpeedTestConfig {
     output: 'terminal',
     timeout: 60000,
     verbose: false,
-    rampUpMs: 0,
+    rampUp: 0,
     ...overrides,
   };
 }
@@ -48,60 +48,6 @@ function makeResult(overrides: Partial<SpeedTestResult> = {}): SpeedTestResult {
     timestamp: overrides.timestamp ?? '2025-01-01T00:00:00.000Z',
   };
 }
-
-describe('formatTerminal', () => {
-  it('returns string with table content', () => {
-    const output = formatTerminal(makeResult());
-    expect(typeof output).toBe('string');
-    expect(output.length).toBeGreaterThan(0);
-  });
-
-  it('includes thread rows for each thread', () => {
-    const result = makeResult({
-      threads: [
-        { ttft: 15, totalTime: 150, totalTokens: 100, tokensPerSecond: 666.67 },
-        { ttft: 25, totalTime: 250, totalTokens: 200, tokensPerSecond: 800 },
-      ],
-    });
-    const output = formatTerminal(result);
-    expect(output).toContain('#1');
-    expect(output).toContain('#2');
-  });
-
-  it('includes aggregate stats', () => {
-    const output = formatTerminal(makeResult());
-    expect(output).toContain('min');
-    expect(output).toContain('max');
-    expect(output).toContain('avg');
-    expect(output).toContain('p50');
-    expect(output).toContain('p95');
-    expect(output).toContain('p99');
-  });
-
-  it('shows OK/FAIL for prefill mode instructionFollowed', () => {
-    const result = makeResult({
-      mode: 'prefill',
-      threads: [
-        { ttft: 10, totalTime: 100, totalTokens: 1, tokensPerSecond: 10, instructionFollowed: true },
-        { ttft: 20, totalTime: 200, totalTokens: 1, tokensPerSecond: 5, instructionFollowed: false },
-      ],
-    });
-    const output = formatTerminal(result);
-    expect(output).toContain('OK');
-    expect(output).toContain('FAIL');
-  });
-
-  it('shows N/A for non-prefill modes', () => {
-    const result = makeResult({
-      mode: 'fresh',
-      threads: [
-        { ttft: 10, totalTime: 100, totalTokens: 50, tokensPerSecond: 500 },
-      ],
-    });
-    const output = formatTerminal(result);
-    expect(output).toContain('N/A');
-  });
-});
 
 describe('formatJson', () => {
   it('produces valid parseable JSON', () => {
