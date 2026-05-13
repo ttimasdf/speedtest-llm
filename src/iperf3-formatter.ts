@@ -46,7 +46,7 @@ export function formatBanner(config: SpeedTestConfig): string {
 }
 
 export function formatColumnHeaders(): string {
-  return '[ ID] Interval        Tokens     tok/s    Threads';
+  return 'Interval        Tokens     tok/s    Threads';
 }
 
 export function formatIntervalRow(snapshot: IntervalSnapshot): string {
@@ -57,7 +57,6 @@ export function formatIntervalRow(snapshot: IntervalSnapshot): string {
   const omitted = snapshot.omitted ? '  (omitted)' : '';
 
   return (
-    '[ALL] ' +
     padRight(interval, 14) +
     padLeft(tokens, 7) + ' tokens  ' +
     padLeft(tps, 7) + ' tok/s  ' +
@@ -85,7 +84,6 @@ export function formatSummaryLine(
   const threads = `${aggregate.threadCount}/${aggregate.threadCount}`;
 
   return (
-    '[ALL] ' +
     padRight(interval, 14) +
     padLeft(tokens, 7) + ' tokens  ' +
     padLeft(avgTps, 7) + ' tok/s  ' +
@@ -115,7 +113,6 @@ export function formatDetailedStats(aggregate: AggregateMetrics): string {
   const lines: string[] = [];
   lines.push('--- Detailed Stats ---');
   lines.push(formatPercentileLine('TTFT:', aggregate.ttft, 's', 6, 1000));
-  lines.push(formatPercentileLine('Total Time:', aggregate.totalTime, 's', 6, 1000));
   lines.push(formatPercentileLine('tok/s:', aggregate.tokensPerSecond, '', 6));
   return lines.join('\n');
 }
