@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "main": "src/index.ts",
+  "bin": {
+    "speedtest-llm": "src/index.ts"
+  },
   "scripts": {
     "build": "bun build ./src/index.ts --outfile ./dist/speedtest-llm --compile",
     "test": "bun test",
