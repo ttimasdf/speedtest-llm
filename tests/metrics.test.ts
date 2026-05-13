@@ -41,8 +41,9 @@ describe('MetricsCollector', () => {
     await Bun.sleep(10);
     const result = collector.finishRun(runId);
 
-    // tokensPerSecond = (totalTokens / totalTime) * 1000
-    const expectedTps = (200 / result.totalTime) * 1000;
+    // tokensPerSecond = (totalTokens / (totalTime - ttft)) * 1000
+    const generationTime = result.totalTime - result.ttft;
+    const expectedTps = (200 / generationTime) * 1000;
     expect(result.tokensPerSecond).toBeCloseTo(expectedTps, 2);
   });
 

@@ -133,15 +133,12 @@ describe('Integration: iperf3-style output', () => {
     expect(output).toContain('model: test-model');
     expect(output).toContain('threads: 2');
     expect(output).toContain('Running speedtest...');
-    expect(output).toContain('[ ID] Interval        Tokens     tok/s    Threads');
-    expect(output).toContain('[ALL]');
+    expect(output).toContain('Interval        Tokens     tok/s    Threads');
     expect(output).toContain('tokens');
     expect(output).toContain('tok/s');
     expect(output).toContain('- - - - - - - - - - - - - - - - - - - - - - - -');
-    expect(output).toMatch(/\[ALL\].*0\.00-.*s/);
     expect(output).toContain('--- Detailed Stats ---');
     expect(output).toContain('TTFT:');
-    expect(output).toContain('Total Time:');
     expect(output).toContain('tok/s:');
     expect(output).toContain('--- Heatmap (TPS per thread × interval) ---');
     expect(output).toContain('T1');
@@ -187,7 +184,6 @@ describe('Integration: iperf3-style output', () => {
     const intervals = spreadIntervals(result);
     const output = formatFinal(config, result, '', intervals);
     expect(output).toContain('mode: cached-long-context');
-    expect(output).toContain('[ALL]');
     expect(output).toContain('speedtest-llm Done.');
   });
 
@@ -205,7 +201,6 @@ describe('Integration: iperf3-style output', () => {
     const intervals = spreadIntervals(result);
     const output = formatFinal(config, result, '', intervals);
     expect(output).toContain('mode: prefill');
-    expect(output).toContain('[ALL]');
     expect(output).toContain('speedtest-llm Done.');
   });
 

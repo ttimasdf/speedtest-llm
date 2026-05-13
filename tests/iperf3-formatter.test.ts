@@ -167,16 +167,15 @@ describe('formatBanner', () => {
 describe('formatColumnHeaders', () => {
   it('contains expected column headers', () => {
     const result = formatColumnHeaders();
-    expect(result).toContain('ID');
     expect(result).toContain('Interval');
     expect(result).toContain('Tokens');
     expect(result).toContain('tok/s');
     expect(result).toContain('Threads');
   });
 
-  it('has [ ID] prefix', () => {
+  it('has no ID brackets prefix', () => {
     const result = formatColumnHeaders();
-    expect(result.startsWith('[ ID]')).toBe(true);
+    expect(result.startsWith('Interval')).toBe(true);
   });
 });
 
@@ -192,7 +191,6 @@ describe('formatIntervalRow', () => {
       omitted: false,
     });
     const result = formatIntervalRow(snapshot);
-    expect(result).toContain('[ALL]');
     expect(result).toContain('2.00-3.00s');
     expect(result).toContain('~210');
     expect(result).toContain('210.0');
@@ -232,7 +230,6 @@ describe('formatSummaryLine', () => {
   it('formats cumulative totals', () => {
     const aggregate = makeAggregate({ totalTokens: 755, threadCount: 3 });
     const result = formatSummaryLine(aggregate, 4);
-    expect(result).toContain('[ALL]');
     expect(result).toContain('0.00-4.00s');
     expect(result).toContain('~755');
     expect(result).toContain('3/3');
@@ -262,10 +259,10 @@ describe('formatDetailedStats', () => {
     expect(result).toContain('p99=');
   });
 
-  it('contains totalTime stats', () => {
+  it('does not contain totalTime stats (removed)', () => {
     const aggregate = makeAggregate();
     const result = formatDetailedStats(aggregate);
-    expect(result).toContain('Total Time');
+    expect(result).not.toContain('Total Time');
   });
 
   it('contains tok/s stats', () => {
@@ -287,10 +284,12 @@ describe('formatDetailedStats', () => {
     expect(result).not.toContain('ms');
   });
 
-  it('formats totalTime values with s units', () => {
+  it('formats TTFT values with s units', () => {
     const aggregate = makeAggregate();
     const result = formatDetailedStats(aggregate);
-    expect(result).toContain('s');
+    expect(result).toContain('TTFT:');
+    expect(result).toContain('s  ');
+    expect(result).not.toContain('ms');
   });
 });
 
@@ -302,8 +301,7 @@ describe('formatFinal', () => {
     const output = formatFinal(config, result, heatmap, result.intervals as IntervalSnapshot[]);
 
     expect(output).toContain('speedtest-llm v1.0.0');
-    expect(output).toContain('[ ID]');
-    expect(output).toContain('[ALL]');
+    expect(output).toContain('Interval');
     expect(output).toContain('--- Detailed Stats ---');
     expect(output).toContain('T1 ████');
     expect(output).toContain('speedtest-llm Done.');
