@@ -40,14 +40,22 @@ export const freshRunner: ModeRunner = {
           onStream?.('chunk');
         }
       },
-      onFinish: ({ totalUsage }) => {
-        const tokens = totalUsage.outputTokens ?? 0;
-        collector.recordChunk(runId, tokens);
+      onFinish: () => {
         onStream?.('done');
       },
     });
 
-    await result.consumeStream();
+    try {
+      await result.consumeStream();
+      const usage = await result.usage;
+      const tokens =
+        typeof usage.outputTokens === 'number'
+          ? usage.outputTokens
+          : (usage.outputTokens as any)?.total ?? 0;
+      console.error('[DEBUG fresh] result.usage:', JSON.stringify(usage));
+      console.error('[DEBUG fresh] tokens:', tokens);
+      collector.recordChunk(runId, tokens);
+    } catch (_err) {}
 
     return collector.finishRun(runId);
   },

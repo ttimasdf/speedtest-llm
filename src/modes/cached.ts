@@ -50,18 +50,24 @@ export const cachedRunner: ModeRunner = {
 
     let firstTokenRecorded = false;
 
-    for await (const _chunk of result.textStream) {
-      if (!firstTokenRecorded) {
-        collector.recordFirstToken(runId);
-        firstTokenRecorded = true;
-        onStream?.('first-token');
+    try {
+      for await (const _chunk of result.textStream) {
+        if (!firstTokenRecorded) {
+          collector.recordFirstToken(runId);
+          firstTokenRecorded = true;
+          onStream?.('first-token');
+        }
+        onStream?.('chunk');
       }
-      onStream?.('chunk');
-    }
 
-    const usage = await result.usage;
-    collector.recordChunk(runId, usage.outputTokens ?? 0);
-    onStream?.('done');
+      const usage = await result.usage;
+      const tokens =
+        typeof usage.outputTokens === 'number'
+          ? usage.outputTokens
+          : (usage.outputTokens as any)?.total ?? 0;
+      collector.recordChunk(runId, tokens);
+      onStream?.('done');
+    } catch (_err) {}
 
     return collector.finishRun(runId);
   },

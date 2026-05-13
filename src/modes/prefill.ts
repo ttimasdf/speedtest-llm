@@ -45,15 +45,21 @@ export const prefillRunner: ModeRunner = {
           onStream?.('chunk');
         }
       },
-      onFinish({ usage }) {
-        collector.recordChunk(runId, usage.outputTokens ?? 0);
+      onFinish() {
         onStream?.('done');
       },
     });
 
-    // Drain the stream to ensure onFinish fires
-    for await (const _ of result.textStream) {
-    }
+    try {
+      for await (const _ of result.textStream) {
+      }
+      const usage = await result.usage;
+      const tokens =
+        typeof usage.outputTokens === 'number'
+          ? usage.outputTokens
+          : (usage.outputTokens as any)?.total ?? 0;
+      collector.recordChunk(runId, tokens);
+    } catch (_err) {}
 
     const runMetrics = collector.finishRun(runId);
     const instructionFollowed = fullResponse.trim() === 'OK';

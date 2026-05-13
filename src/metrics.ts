@@ -46,7 +46,8 @@ export function createMetricsCollector(): MetricsCollector {
       if (!state) throw new Error(`Unknown run: ${runId}`);
       state.endTime = performance.now();
       const totalTime = state.endTime - state.startTime;
-      const tokensPerSecond = totalTime > 0 ? (state.totalTokens / totalTime) * 1000 : 0;
+      const generationTime = totalTime - state.ttft;
+      const tokensPerSecond = generationTime > 0 ? (state.totalTokens / generationTime) * 1000 : 0;
       runs.delete(runId);
       return {
         ttft: state.ttft,
