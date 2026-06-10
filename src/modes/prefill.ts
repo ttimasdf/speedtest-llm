@@ -1,4 +1,4 @@
-import type { SpeedTestConfig, RunMetrics } from '../types.js';
+import type { SpeedTestConfig, RunMetrics, StreamTraceEvent } from '../types.js';
 import type { MetricsCollector } from '../metrics.js';
 import type { LanguageModel } from 'ai';
 import type { ModeRunner } from './runner.js';
@@ -15,6 +15,7 @@ export const prefillRunner: ModeRunner = {
     metricsFactory: () => MetricsCollector,
     context: string,
     onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+    onTrace?: (event: StreamTraceEvent) => void,
     signal?: AbortSignal,
   ): Promise<RunMetrics> {
     const prompt =
@@ -29,6 +30,8 @@ export const prefillRunner: ModeRunner = {
     let firstChunk = true;
     let streamTokenCount = 0;
 
+    onTrace?.({ event: 'stream_start' });
+
     const result = streamText({
       model,
       messages,
@@ -37,6 +40,7 @@ export const prefillRunner: ModeRunner = {
       abortSignal: signal,
       onChunk({ chunk }) {
         if (chunk.type !== 'text-delta') {
+          onTrace?.({ event: 'stream_chunk', blockType: chunk.type, block: chunk });
           return;
         }
         streamTokenCount += Math.max(1, Math.round(chunk.text.length / 4));
@@ -44,6 +48,9 @@ export const prefillRunner: ModeRunner = {
           collector.recordFirstToken(runId);
           firstChunk = false;
           onStream?.('first-token');
+          onTrace?.({ event: 'stream_first_chunk', content: chunk.text, blockType: chunk.type });
+        } else {
+          onTrace?.({ event: 'stream_chunk', content: chunk.text, blockType: chunk.type });
         }
         fullResponse += chunk.text;
         onStream?.('chunk');
@@ -65,7 +72,10 @@ export const prefillRunner: ModeRunner = {
             : (usage.outputTokens as any)?.total ?? 0;
       }
       collector.recordChunk(runId, tokens);
-    } catch (_err) {}
+      onTrace?.({ event: 'stream_end', tokens });
+    } catch (err) {
+      onTrace?.({ event: 'stream_error', error: err });
+    }
 
     const runMetrics = collector.finishRun(runId);
     const instructionFollowed = fullResponse.trim() === 'OK';

@@ -1,4 +1,4 @@
-import type { SpeedTestConfig, RunMetrics } from '../types.js';
+import type { SpeedTestConfig, RunMetrics, StreamTraceEvent } from '../types.js';
 import type { MetricsCollector } from '../metrics.js';
 import type { LanguageModel } from 'ai';
 
@@ -11,6 +11,7 @@ export interface ModeRunner {
     metricsFactory: () => MetricsCollector,
     context: string,
     onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+    onTrace?: (event: StreamTraceEvent) => void,
     signal?: AbortSignal,
   ): Promise<RunMetrics>;
 }

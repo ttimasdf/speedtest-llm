@@ -1,4 +1,4 @@
-import type { SpeedTestConfig, RunMetrics } from '../types.js';
+import type { SpeedTestConfig, RunMetrics, StreamTraceEvent } from '../types.js';
 import type { MetricsCollector } from '../metrics.js';
 import type { LanguageModel } from 'ai';
 import type { ModeRunner } from './runner.js';
@@ -17,6 +17,7 @@ export const freshRunner: ModeRunner = {
     metricsFactory: () => MetricsCollector,
     _context: string,
     onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+    onTrace?: (event: StreamTraceEvent) => void,
     signal?: AbortSignal,
   ): Promise<RunMetrics> {
     const collector = metricsFactory();
@@ -24,6 +25,8 @@ export const freshRunner: ModeRunner = {
 
     let firstChunkReceived = false;
     let streamTokenCount = 0;
+
+    onTrace?.({ event: 'stream_start' });
 
     const result = streamText({
       model,
@@ -33,6 +36,7 @@ export const freshRunner: ModeRunner = {
       abortSignal: signal,
       onChunk: ({ chunk }) => {
         if (chunk.type !== 'text-delta') {
+          onTrace?.({ event: 'stream_chunk', blockType: chunk.type, block: chunk });
           return;
         }
         streamTokenCount += Math.max(1, Math.round(chunk.text.length / 4));
@@ -40,6 +44,9 @@ export const freshRunner: ModeRunner = {
           firstChunkReceived = true;
           collector.recordFirstToken(runId);
           onStream?.('first-token');
+          onTrace?.({ event: 'stream_first_chunk', content: chunk.text, blockType: chunk.type });
+        } else {
+          onTrace?.({ event: 'stream_chunk', content: chunk.text, blockType: chunk.type });
         }
         onStream?.('chunk');
       },
@@ -59,7 +66,10 @@ export const freshRunner: ModeRunner = {
             : (usage.outputTokens as any)?.total ?? 0;
       }
       collector.recordChunk(runId, tokens);
-    } catch (_err) {}
+      onTrace?.({ event: 'stream_end', tokens });
+    } catch (err) {
+      onTrace?.({ event: 'stream_error', error: err });
+    }
 
     return collector.finishRun(runId);
   },

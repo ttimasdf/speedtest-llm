@@ -1,4 +1,4 @@
-import type { SpeedTestConfig, RunMetrics } from '../types.js';
+import type { SpeedTestConfig, RunMetrics, StreamTraceEvent } from '../types.js';
 import type { MetricsCollector } from '../metrics.js';
 import type { LanguageModel } from 'ai';
 import type { ModeRunner } from './runner.js';
@@ -14,6 +14,7 @@ export const cachedRunner: ModeRunner = {
     metricsFactory: () => MetricsCollector,
     context: string,
     onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+    onTrace?: (event: StreamTraceEvent) => void,
     signal?: AbortSignal,
   ): Promise<RunMetrics> {
     const prompt =
@@ -40,27 +41,37 @@ export const cachedRunner: ModeRunner = {
     const collector = metricsFactory();
     const runId = collector.startRun();
 
+    onTrace?.({ event: 'stream_start' });
+
+    let firstTokenRecorded = false;
+    let streamTokenCount = 0;
+
     const result = streamText({
       model,
       messages,
       maxOutputTokens: config.maxTokens,
       maxRetries: 0,
       abortSignal: signal,
-    });
-
-    let firstTokenRecorded = false;
-    let streamTokenCount = 0;
-
-    try {
-      for await (const chunk of result.textStream) {
-        const content = typeof chunk === 'string' ? chunk : ((chunk as any).text ?? (chunk as any).delta ?? '');
-        streamTokenCount += Math.max(1, Math.round(content.length / 4));
+      onChunk: ({ chunk }) => {
+        if (chunk.type !== 'text-delta') {
+          onTrace?.({ event: 'stream_chunk', blockType: chunk.type, block: chunk });
+          return;
+        }
+        streamTokenCount += Math.max(1, Math.round(chunk.text.length / 4));
         if (!firstTokenRecorded) {
           collector.recordFirstToken(runId);
           firstTokenRecorded = true;
           onStream?.('first-token');
+          onTrace?.({ event: 'stream_first_chunk', content: chunk.text, blockType: chunk.type });
+        } else {
+          onTrace?.({ event: 'stream_chunk', content: chunk.text, blockType: chunk.type });
         }
         onStream?.('chunk');
+      },
+    });
+
+    try {
+      for await (const _chunk of result.textStream) {
       }
 
       let tokens = streamTokenCount;
@@ -72,8 +83,11 @@ export const cachedRunner: ModeRunner = {
             : (usage.outputTokens as any)?.total ?? 0;
       }
       collector.recordChunk(runId, tokens);
+      onTrace?.({ event: 'stream_end', tokens });
       onStream?.('done');
-    } catch (_err) {}
+    } catch (err) {
+      onTrace?.({ event: 'stream_error', error: err });
+    }
 
     return collector.finishRun(runId);
   },

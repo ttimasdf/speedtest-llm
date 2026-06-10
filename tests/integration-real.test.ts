@@ -28,6 +28,8 @@ function makeConfig(env: { baseUrl: string; apiKey: string; model: string }): Sp
     rampUp: 0,
     interval: 1,
     omit: 0,
+    traceOutput: 'off',
+    traceIncludeContent: false,
   };
 }
 

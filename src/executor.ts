@@ -4,6 +4,7 @@ import { getRunner } from './modes/registry.js';
 import { createMetricsCollector, computeAggregates, computeStats } from './metrics.js';
 import { loadContext } from './context-loader.js';
 import { createIntervalTracker } from './interval-tracker.js';
+import { createTraceCollector } from './tracing.js';
 
 export interface ExecuteOptions {
   onInterval?: (snapshot: IntervalSnapshot) => void;
@@ -28,6 +29,7 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
     omitMs: config.omit * 1000,
     threadCount: config.threads,
   });
+  const traces = createTraceCollector(config);
 
   const allIntervals: IntervalSnapshot[] = [];
   const allThreadStates: ThreadStreamState[][] = [];
@@ -53,7 +55,15 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
       tracker.onStreamEvent(i, event);
     };
 
-    return runner.run(config, model, metricsFactory, context, onStream, controller.signal);
+    return runner.run(
+      config,
+      model,
+      metricsFactory,
+      context,
+      onStream,
+      (event) => traces.record(i, event),
+      controller.signal,
+    );
   });
 
   const tickInterval = setInterval(() => {
@@ -65,6 +75,7 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
   }, 100);
 
   const outcomes = await Promise.allSettled(threadPromises);
+  await traces.flush();
 
   clearInterval(tickInterval);
   clearTimeout(timeoutId);
@@ -120,5 +131,6 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
     timestamp: new Date().toISOString(),
     intervals: allIntervals,
     threadStates: allThreadStates,
+    traces: config.traceOutput === 'memory' ? traces.getRecords() : undefined,
   };
 }

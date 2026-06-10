@@ -34,6 +34,8 @@ function makeConfig(overrides: Partial<SpeedTestConfig> = {}): SpeedTestConfig {
     rampUp: 0,
     interval: 1,
     omit: 2,
+    traceOutput: 'off',
+    traceIncludeContent: false,
     ...overrides,
   };
 }

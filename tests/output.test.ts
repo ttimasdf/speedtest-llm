@@ -16,6 +16,10 @@ function makeConfig(overrides: Partial<SpeedTestConfig> = {}): SpeedTestConfig {
     timeout: 60000,
     verbose: false,
     rampUp: 0,
+    interval: 1,
+    omit: 0,
+    traceOutput: 'off',
+    traceIncludeContent: false,
     ...overrides,
   };
 }

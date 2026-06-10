@@ -1,6 +1,7 @@
 export type ProviderType = 'openai-chat' | 'anthropic-messages' | 'openai-responses';
 export type SpeedTestMode = 'fresh' | 'cached-long-context' | 'prefill';
 export type OutputFormat = 'terminal' | 'json';
+export type TraceOutput = 'off' | 'memory' | 'file';
 
 export interface SpeedTestConfig {
   readonly mode: SpeedTestMode;
@@ -18,6 +19,9 @@ export interface SpeedTestConfig {
   readonly rampUp: number;
   readonly interval: number;
   readonly omit: number;
+  readonly traceOutput: TraceOutput;
+  readonly traceFile?: string;
+  readonly traceIncludeContent: boolean;
 }
 
 export interface RunMetrics {
@@ -59,6 +63,33 @@ export interface HeatmapCell {
   readonly isWaiting: boolean;
 }
 
+export type StreamTraceEvent =
+  | { readonly event: 'stream_start' }
+  | { readonly event: 'stream_first_chunk'; readonly content?: string; readonly blockType?: string; readonly block?: unknown }
+  | { readonly event: 'stream_chunk'; readonly content?: string; readonly blockType?: string; readonly block?: unknown }
+  | { readonly event: 'stream_end'; readonly tokens?: number }
+  | { readonly event: 'stream_error'; readonly error: unknown };
+
+export interface TraceRecord {
+  readonly trace_id: string;
+  readonly span_id: string;
+  readonly service_name: string;
+  readonly thread: number;
+  readonly thread_index: number;
+  readonly event: string;
+  readonly api_type: ProviderType;
+  readonly mode: SpeedTestMode;
+  readonly model: string;
+  readonly timestamp: number;
+  readonly time_unix_nano: string;
+  readonly stream_start_timestamp: number;
+  readonly stream_start_time_unix_nano: string;
+  readonly elapsed_ms: number;
+  readonly [key: string]: unknown;
+}
+
+export type StreamCallback = (threadIndex: number, event: 'first-token' | 'chunk' | 'done', tokenCount?: number) => void;
+
 export interface AggregateMetrics {
   readonly ttft: PercentileStats;
   readonly tokensPerSecond: PercentileStats;
@@ -80,4 +111,5 @@ export interface SpeedTestResult {
   readonly timestamp: string;
   readonly intervals?: readonly IntervalSnapshot[];
   readonly threadStates?: readonly ThreadStreamState[][];
+  readonly traces?: readonly TraceRecord[];
 }

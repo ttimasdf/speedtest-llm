@@ -1,9 +1,10 @@
 import { Command } from 'commander';
-import type { OutputFormat, ProviderType, SpeedTestConfig, SpeedTestMode } from './types.js';
+import type { OutputFormat, ProviderType, SpeedTestConfig, SpeedTestMode, TraceOutput } from './types.js';
 
 const VALID_MODES: SpeedTestMode[] = ['fresh', 'cached-long-context', 'prefill'];
 const VALID_API_TYPES: ProviderType[] = ['openai-chat', 'anthropic-messages', 'openai-responses'];
 const VALID_OUTPUT_FORMATS: OutputFormat[] = ['terminal', 'json'];
+const VALID_TRACE_OUTPUTS: TraceOutput[] = ['off', 'memory', 'file'];
 
 export function parseConfig(argv: string[]): SpeedTestConfig {
   const program = new Command();
@@ -25,7 +26,10 @@ export function parseConfig(argv: string[]): SpeedTestConfig {
     .option('--verbose', 'Enable verbose logging', false)
     .option('--ramp-up <s>', 'Ramp-up period in seconds', '0')
     .option('-i, --interval <seconds>', 'Interval between snapshots in seconds', '1')
-    .option('--omit <seconds>', 'Omit initial seconds from results', '0');
+    .option('--omit <seconds>', 'Omit initial seconds from results', '0')
+    .option('--trace-output <target>', 'Trace output: off, memory, file', 'off')
+    .option('--trace-file <path>', 'Trace JSONL file path (for --trace-output file)', 'speedtest-llm-trace.jsonl')
+    .option('--trace-include-content', 'Include streamed text content in trace records', false);
 
   program.parse(argv, { from: 'user' });
   const opts = program.opts();
@@ -101,7 +105,14 @@ export function parseConfig(argv: string[]): SpeedTestConfig {
     process.exit(1);
   }
 
+  const traceOutput = opts.traceOutput as string;
+  if (!VALID_TRACE_OUTPUTS.includes(traceOutput as TraceOutput)) {
+    console.error(`Error: Invalid --trace-output "${traceOutput}". Must be one of: ${VALID_TRACE_OUTPUTS.join(', ')}`);
+    process.exit(1);
+  }
+
   const outputFile = opts.outputFile as string | undefined;
+  const traceFile = opts.traceFile as string | undefined;
 
   return {
     mode: mode as SpeedTestMode,
@@ -119,5 +130,8 @@ export function parseConfig(argv: string[]): SpeedTestConfig {
     rampUp,
     interval,
     omit,
+    traceOutput: traceOutput as TraceOutput,
+    traceFile: traceOutput === 'file' ? traceFile : undefined,
+    traceIncludeContent: !!opts.traceIncludeContent,
   };
 }

@@ -4,6 +4,8 @@ import type {
   ThreadStreamState,
   HeatmapCell,
   StreamCallback,
+  StreamTraceEvent,
+  TraceRecord,
   SpeedTestResult,
   SpeedTestConfig,
   AggregateMetrics,
@@ -151,9 +153,14 @@ describe('SpeedTestConfig extension', () => {
       rampUp: 1000,
       interval: 500,
       omit: 3,
+      traceOutput: 'memory',
+      traceFile: 'trace.jsonl',
+      traceIncludeContent: true,
     };
     expect(config.interval).toBe(500);
     expect(config.omit).toBe(3);
+    expect(config.traceOutput).toBe('memory');
+    expect(config.traceIncludeContent).toBe(true);
   });
 });
 
@@ -176,6 +183,8 @@ describe('SpeedTestResult extension', () => {
         rampUp: 0,
         interval: 500,
         omit: 3,
+        traceOutput: 'off',
+        traceIncludeContent: false,
       },
       threads: [
         { ttft: 50, totalTime: 2000, totalTokens: 100, tokensPerSecond: 50 },
@@ -195,9 +204,36 @@ describe('SpeedTestResult extension', () => {
       timestamp: '2025-01-01T00:00:00Z',
       intervals: [],
       threadStates: [],
+      traces: [],
     };
     expect(Array.isArray(result.intervals)).toBe(true);
     expect(Array.isArray(result.threadStates)).toBe(true);
+    expect(Array.isArray(result.traces)).toBe(true);
+  });
+});
+
+describe('Trace types', () => {
+  it('can represent stream trace events and OTEL-shaped records', () => {
+    const event: StreamTraceEvent = { event: 'stream_chunk', content: 'hello', blockType: 'text-delta' };
+    const record: TraceRecord = {
+      trace_id: 'a'.repeat(32),
+      span_id: 'b'.repeat(16),
+      service_name: 'speedtest-llm',
+      thread: 1,
+      thread_index: 0,
+      event: event.event,
+      api_type: 'openai-chat',
+      mode: 'fresh',
+      model: 'gpt-4',
+      timestamp: 123,
+      time_unix_nano: '123000000',
+      stream_start_timestamp: 100,
+      stream_start_time_unix_nano: '100000000',
+      elapsed_ms: 23,
+      tokens: 10,
+    };
+    expect(record.event).toBe('stream_chunk');
+    expect(record.tokens).toBe(10);
   });
 });
 

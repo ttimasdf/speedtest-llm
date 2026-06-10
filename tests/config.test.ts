@@ -36,6 +36,9 @@ describe('parseConfig', () => {
     expect(cfg.rampUp).toBe(0);
     expect(cfg.interval).toBe(1);
     expect(cfg.omit).toBe(0);
+    expect(cfg.traceOutput).toBe('off');
+    expect(cfg.traceFile).toBeUndefined();
+    expect(cfg.traceIncludeContent).toBe(false);
   });
 
   it('valid config with all args set', () => {
@@ -55,6 +58,9 @@ describe('parseConfig', () => {
       '--ramp-up', '0.5',
       '--interval', '2',
       '--omit', '3',
+      '--trace-output', 'file',
+      '--trace-file', 'trace.jsonl',
+      '--trace-include-content',
     ]);
     expect(cfg.mode).toBe('prefill');
     expect(cfg.apiKey).toBe('my-key');
@@ -70,6 +76,9 @@ describe('parseConfig', () => {
     expect(cfg.rampUp).toBe(0.5);
     expect(cfg.interval).toBe(2);
     expect(cfg.omit).toBe(3);
+    expect(cfg.traceOutput).toBe('file');
+    expect(cfg.traceFile).toBe('trace.jsonl');
+    expect(cfg.traceIncludeContent).toBe(true);
   });
 
   it('invalid mode exits with error', () => {
@@ -157,6 +166,16 @@ describe('parseConfig', () => {
     mockExit();
     try {
       expect(() => parseConfig(['--mode', 'fresh', '--api-key', 'k', '--omit', '-1'])).toThrow('process.exit called');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      restoreExit();
+    }
+  });
+
+  it('--trace-output invalid rejects', () => {
+    mockExit();
+    try {
+      expect(() => parseConfig(['--mode', 'fresh', '--api-key', 'k', '--trace-output', 'stdout'])).toThrow('process.exit called');
       expect(exitSpy).toHaveBeenCalledWith(1);
     } finally {
       restoreExit();

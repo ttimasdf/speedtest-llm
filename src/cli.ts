@@ -40,6 +40,9 @@ program
   .option('--ramp-up <s>', 'Ramp-up period in seconds', '0')
   .option('-i, --interval <seconds>', 'Interval between snapshots in seconds', '1')
   .option('--omit <seconds>', 'Omit initial seconds from results', '0')
+  .option('--trace-output <target>', 'Trace output: off, memory, file', 'off')
+  .option('--trace-file <path>', 'Trace JSONL file path (for --trace-output file)', 'speedtest-llm-trace.jsonl')
+  .option('--trace-include-content', 'Include streamed text content in trace records', false)
   .action(async (opts) => {
     try {
       const config = parseConfig(buildArgv(opts));

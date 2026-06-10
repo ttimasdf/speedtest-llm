@@ -2,6 +2,7 @@ import { describe, it, expect, mock, beforeEach } from 'bun:test';
 import type {
   SpeedTestConfig,
   RunMetrics,
+  StreamTraceEvent,
 } from '../src/types.js';
 import type { MetricsCollector } from '../src/metrics.js';
 
@@ -11,12 +12,13 @@ type RunnerImpl = (
   metricsFactory: () => MetricsCollector,
   context: string,
   onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+  onTrace?: (event: StreamTraceEvent) => void,
   signal?: AbortSignal,
 ) => Promise<RunMetrics>;
 
 let mockRunnerImpl: RunnerImpl;
 
-const mockRun = mock(async (...args: [SpeedTestConfig, unknown, () => MetricsCollector, string, ((e: 'first-token' | 'chunk' | 'done') => void)?]) =>
+const mockRun = mock(async (...args: [SpeedTestConfig, unknown, () => MetricsCollector, string, ((e: 'first-token' | 'chunk' | 'done') => void)?, ((event: StreamTraceEvent) => void)?, AbortSignal?]) =>
   mockRunnerImpl(...args),
 );
 
@@ -64,6 +66,8 @@ function makeConfig(overrides: Partial<SpeedTestConfig> = {}): SpeedTestConfig {
     rampUp: 0,
     interval: 1,
     omit: 0,
+    traceOutput: 'off',
+    traceIncludeContent: false,
     ...overrides,
   };
 }
@@ -74,6 +78,7 @@ async function streamingRunner(
   metricsFactory: () => MetricsCollector,
   _context: string,
   onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+  onTrace?: (event: StreamTraceEvent) => void,
   _signal?: AbortSignal,
   opts: { durationMs: number; chunksPerTick: number; failAfterMs?: number; errorMsg?: string } = {
     durationMs: 2500,
@@ -86,6 +91,8 @@ async function streamingRunner(
   await Bun.sleep(20);
   collector.recordFirstToken(runId);
   onStream?.('first-token');
+  onTrace?.({ event: 'stream_start' });
+  onTrace?.({ event: 'stream_first_chunk', content: 'x', blockType: 'text-delta' });
 
   const start = performance.now();
 
@@ -96,10 +103,12 @@ async function streamingRunner(
     await Bun.sleep(100);
     for (let i = 0; i < opts.chunksPerTick; i++) {
       onStream?.('chunk');
+      onTrace?.({ event: 'stream_chunk', content: 'x', blockType: 'text-delta' });
       collector.recordChunk(runId, 1);
     }
   }
 
+  onTrace?.({ event: 'stream_end', tokens: opts.durationMs });
   onStream?.('done');
   return collector.finishRun(runId);
 }
@@ -278,14 +287,14 @@ describe('Integration: iperf3-style output', () => {
 
   it('error handling → errors displayed when a thread fails', async () => {
     let callCount = 0;
-    mockRunnerImpl = async (config, model, metricsFactory, context, onStream) => {
+    mockRunnerImpl = async (config, model, metricsFactory, context, onStream, onTrace) => {
       callCount++;
       if (callCount === 2) {
         onStream?.('first-token');
         await Bun.sleep(100);
         throw new Error('Simulated connection timeout');
       }
-      return streamingRunner(config, model, metricsFactory, context, onStream, {
+      return streamingRunner(config, model, metricsFactory, context, onStream, onTrace, undefined, {
         durationMs: 2000,
         chunksPerTick: 10,
       });
