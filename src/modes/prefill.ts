@@ -27,6 +27,7 @@ export const prefillRunner: ModeRunner = {
 
     let fullResponse = '';
     let firstChunk = true;
+    let streamTokenCount = 0;
 
     const result = streamText({
       model,
@@ -35,15 +36,17 @@ export const prefillRunner: ModeRunner = {
       maxRetries: 0,
       abortSignal: signal,
       onChunk({ chunk }) {
+        if (chunk.type !== 'text-delta') {
+          return;
+        }
+        streamTokenCount += Math.max(1, Math.round(chunk.text.length / 4));
         if (firstChunk) {
           collector.recordFirstToken(runId);
           firstChunk = false;
           onStream?.('first-token');
         }
-        if (chunk.type === 'text-delta') {
-          fullResponse += chunk.text;
-          onStream?.('chunk');
-        }
+        fullResponse += chunk.text;
+        onStream?.('chunk');
       },
       onFinish() {
         onStream?.('done');
@@ -53,11 +56,14 @@ export const prefillRunner: ModeRunner = {
     try {
       for await (const _ of result.textStream) {
       }
-      const usage = await result.usage;
-      const tokens =
-        typeof usage.outputTokens === 'number'
-          ? usage.outputTokens
-          : (usage.outputTokens as any)?.total ?? 0;
+      let tokens = streamTokenCount;
+      if (tokens === 0) {
+        const usage = await result.usage;
+        tokens =
+          typeof usage.outputTokens === 'number'
+            ? usage.outputTokens
+            : (usage.outputTokens as any)?.total ?? 0;
+      }
       collector.recordChunk(runId, tokens);
     } catch (_err) {}
 

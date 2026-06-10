@@ -1,6 +1,6 @@
 import { describe, it, expect, mock, beforeEach } from 'bun:test';
 
-let mockUsageOutputTokens = 100;
+let mockUsageOutputTokens: number | undefined = 100;
 let mockStreamChunks: string[] = ['hello', ' world'];
 
 mock.module('ai', () => ({
@@ -54,6 +54,10 @@ function makeConfig(overrides: Partial<SpeedTestConfig> = {}): SpeedTestConfig {
     timeout: 60000,
     verbose: false,
     rampUp: 0,
+    interval: 1,
+    omit: 0,
+    traceOutput: 'off',
+    traceIncludeContent: false,
     ...overrides,
   };
 }
@@ -66,7 +70,25 @@ describe('Mode: fresh', () => {
     mockStreamChunks = ['hello', ' world'];
   });
 
-  it('uses prompt (not messages), records metrics', async () => {
+  it('uses prompt (not messages), records metrics from stream chunks', async () => {
+    const config = makeConfig();
+    const result = await freshRunner.run(
+      config,
+      mockModel,
+      () => createMetricsCollector(),
+      'unused context',
+    );
+
+    // 'hello' (5 chars → round(5/4)=1) + ' world' (6 chars → round(6/4)=2) = 3
+    expect(result.totalTokens).toBe(3);
+    expect(result.ttft).toBeGreaterThanOrEqual(0);
+    expect(result.totalTime).toBeGreaterThanOrEqual(0);
+    expect(result.tokensPerSecond).toBeGreaterThanOrEqual(0);
+  });
+
+  it('falls back to result.usage when no stream chunks', async () => {
+    mockStreamChunks = [];
+    mockUsageOutputTokens = 100;
     const config = makeConfig();
     const result = await freshRunner.run(
       config,
@@ -76,9 +98,6 @@ describe('Mode: fresh', () => {
     );
 
     expect(result.totalTokens).toBe(100);
-    expect(result.ttft).toBeGreaterThanOrEqual(0);
-    expect(result.totalTime).toBeGreaterThanOrEqual(0);
-    expect(result.tokensPerSecond).toBeGreaterThanOrEqual(0);
   });
 });
 
@@ -97,7 +116,8 @@ describe('Mode: cached', () => {
       'long context text here',
     );
 
-    expect(result.totalTokens).toBe(200);
+    // 'cached' (6 chars → round(6/4)=2) + ' response' (9 chars → round(9/4)=2) = 4
+    expect(result.totalTokens).toBe(4);
     expect(result.ttft).toBeGreaterThanOrEqual(0);
     expect(result.totalTime).toBeGreaterThanOrEqual(0);
   });
@@ -118,9 +138,24 @@ describe('Mode: prefill', () => {
       'some context',
     );
 
-    expect(result.totalTokens).toBe(5);
+    // 'O' (1 char → round(1/4)=0 → max(1,0)=1) + 'K' (1 char → same) = 2
+    expect(result.totalTokens).toBe(2);
     expect(result.ttft).toBeGreaterThanOrEqual(0);
     expect(result.instructionFollowed).toBe(true);
+  });
+
+  it('falls back to result.usage when no stream chunks', async () => {
+    mockStreamChunks = [];
+    mockUsageOutputTokens = 5;
+    const config = makeConfig({ mode: 'prefill' });
+    const result = await prefillRunner.run(
+      config,
+      mockModel,
+      () => createMetricsCollector(),
+      'some context',
+    );
+
+    expect(result.totalTokens).toBe(5);
   });
 
   it('instructionFollowed is false when response is not "OK"', async () => {

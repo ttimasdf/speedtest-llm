@@ -49,9 +49,12 @@ export const cachedRunner: ModeRunner = {
     });
 
     let firstTokenRecorded = false;
+    let streamTokenCount = 0;
 
     try {
-      for await (const _chunk of result.textStream) {
+      for await (const chunk of result.textStream) {
+        const content = typeof chunk === 'string' ? chunk : ((chunk as any).text ?? (chunk as any).delta ?? '');
+        streamTokenCount += Math.max(1, Math.round(content.length / 4));
         if (!firstTokenRecorded) {
           collector.recordFirstToken(runId);
           firstTokenRecorded = true;
@@ -60,11 +63,14 @@ export const cachedRunner: ModeRunner = {
         onStream?.('chunk');
       }
 
-      const usage = await result.usage;
-      const tokens =
-        typeof usage.outputTokens === 'number'
-          ? usage.outputTokens
-          : (usage.outputTokens as any)?.total ?? 0;
+      let tokens = streamTokenCount;
+      if (tokens === 0) {
+        const usage = await result.usage;
+        tokens =
+          typeof usage.outputTokens === 'number'
+            ? usage.outputTokens
+            : (usage.outputTokens as any)?.total ?? 0;
+      }
       collector.recordChunk(runId, tokens);
       onStream?.('done');
     } catch (_err) {}

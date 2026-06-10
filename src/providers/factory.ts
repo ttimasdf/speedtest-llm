@@ -13,6 +13,11 @@ export function createProvider(config: SpeedTestConfig): LanguageModel {
     name: 'speedtest-provider',
     apiKey: config.apiKey,
     baseURL: config.baseUrl,
+    includeUsage: true,
+    transformRequestBody: (args) => ({
+      ...args,
+      thinking: { type: 'disabled' },
+    }),
   });
 
   return provider.chatModel(config.model);
