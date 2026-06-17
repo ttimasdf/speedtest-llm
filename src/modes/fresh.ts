@@ -3,6 +3,7 @@ import type { MetricsCollector } from '../metrics.js';
 import type { LanguageModel } from 'ai';
 import type { ModeRunner } from './runner.js';
 import { streamText } from 'ai';
+import { formatTokenUsage, outputTokensFromUsage } from '../token-usage.js';
 
 const FRESH_PROMPT =
   'Write a comprehensive, detailed essay about the history and evolution of computing, from the abacus to modern AI. Include specific dates, key figures, and technical milestones. Be thorough and expansive.';
@@ -27,6 +28,7 @@ export const freshRunner: ModeRunner = {
     let firstChunkReceived = false;
     let streamTokenCount = 0;
     let chunkCount = 0;
+    let fullResponse = '';
 
     onTrace?.({ event: 'stream_start' });
     vlog('stream started, waiting for first chunk...');
@@ -44,6 +46,7 @@ export const freshRunner: ModeRunner = {
         }
         chunkCount++;
         streamTokenCount += Math.max(1, Math.round(chunk.text.length / 4));
+        fullResponse += chunk.text;
         if (!firstChunkReceived) {
           firstChunkReceived = true;
           collector.recordFirstToken(runId);
@@ -62,16 +65,14 @@ export const freshRunner: ModeRunner = {
 
     try {
       await result.consumeStream();
+      const usage = await result.usage;
       let tokens = streamTokenCount;
       if (tokens === 0) {
-        const usage = await result.usage;
-        tokens =
-          typeof usage.outputTokens === 'number'
-            ? usage.outputTokens
-            : (usage.outputTokens as any)?.total ?? 0;
+        tokens = outputTokensFromUsage(usage);
       }
       collector.recordChunk(runId, tokens);
-      onTrace?.({ event: 'stream_end', tokens });
+      onTrace?.({ event: 'stream_end', tokens, content: fullResponse, usage });
+      vlog(`upstream usage: ${formatTokenUsage(usage)}`);
       vlog(`stream end: ${chunkCount} chunks, ~${tokens} tokens`);
     } catch (err) {
       onTrace?.({ event: 'stream_error', error: err });

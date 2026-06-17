@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from 'bun:test';
-import type { SpeedTestConfig, RunMetrics } from '../src/types.js';
+import type { SpeedTestConfig } from '../src/types.js';
 
 // Mock dependencies before importing executor
 const mockRun = mock(async () => ({
@@ -40,7 +40,6 @@ function makeConfig(overrides: Partial<SpeedTestConfig> = {}): SpeedTestConfig {
     output: 'terminal',
     timeout: 60000,
     verbose: false,
-    rampUp: 0,
     interval: 1,
     omit: 0,
     traceOutput: 'off',
@@ -124,7 +123,7 @@ describe('executeParallel', () => {
     expect(new Date(result.timestamp).toISOString()).toBe(result.timestamp);
   });
 
-  it('spreads thread starts across the total ramp-up period', async () => {
+  it('burst-starts all threads', async () => {
     const starts: number[] = [];
     mockRun.mockImplementation(async () => {
       starts.push(performance.now());
@@ -136,36 +135,9 @@ describe('executeParallel', () => {
       };
     });
 
-    await executeParallel(makeConfig({ threads: 3, rampUp: 0.1, timeout: 1000 }));
+    await executeParallel(makeConfig({ threads: 5, timeout: 1000 }));
 
-    expect(starts).toHaveLength(3);
-    expect(starts[2] - starts[0]).toBeLessThan(170);
-  });
-
-  it('does not wait for pending ramp-up sleeps after timeout', async () => {
-    const success: RunMetrics = {
-      ttft: 0,
-      totalTime: 30,
-      totalTokens: 0,
-      tokensPerSecond: 0,
-    };
-
-    mockRun.mockImplementation(async (...args: unknown[]) => {
-      const signal = args[6] as AbortSignal | undefined;
-      if (signal?.aborted) return success;
-
-      return new Promise<RunMetrics>(resolve => {
-        signal?.addEventListener('abort', () => resolve(success), { once: true });
-      });
-    });
-
-    const start = performance.now();
-    const result = await executeParallel(makeConfig({ threads: 3, rampUp: 1, timeout: 30 }));
-    const elapsed = performance.now() - start;
-
-    expect(elapsed).toBeLessThan(250);
-    expect(mockRun).toHaveBeenCalledTimes(1);
-    expect(result.aggregate.successCount).toBe(1);
-    expect(result.aggregate.errorCount).toBe(2);
+    expect(starts).toHaveLength(5);
+    expect(Math.max(...starts) - Math.min(...starts)).toBeLessThan(50);
   });
 });

@@ -15,12 +15,11 @@ export interface IntervalTracker {
 export interface IntervalTrackerConfig {
   intervalMs: number;
   omitMs: number;
-  rampUpMs: number;
   threadCount: number;
 }
 
 export function createIntervalTracker(config: IntervalTrackerConfig, verbose = false): IntervalTracker {
-  const { intervalMs, omitMs, rampUpMs } = config;
+  const { intervalMs, omitMs } = config;
 
   const log = (msg: string) => { if (verbose) console.error(`[tracker] ${msg}`); };
 
@@ -30,9 +29,7 @@ export function createIntervalTracker(config: IntervalTrackerConfig, verbose = f
   }));
 
   let clockStarted = false;
-  let clockStartTime = 0;
   let phaseStartTime = 0;
-  let rampUpComplete = rampUpMs <= 0;
   let nextIntervalIndex = 0;
 
   function elapsedSincePhaseStart(now: number): number {
@@ -48,32 +45,15 @@ export function createIntervalTracker(config: IntervalTrackerConfig, verbose = f
 
     if (elapsed < intervalEnd) return null;
 
-    // Time-based ramp-up check. The interval that crosses the ramp-up
-    // boundary is omitted, then the visible interval clock restarts at the
-    // emitted interval boundary.
-    const wasInRampUp = !rampUpComplete && rampUpMs > 0;
-    let rampUpJustEnded = false;
-    if (wasInRampUp && now - clockStartTime >= rampUpMs) {
-      rampUpComplete = true;
-      rampUpJustEnded = true;
-    }
-
     const tokens = threads.reduce((sum, t) => sum + t.tokensInInterval, 0);
     const activeThreadCount = threads.filter(t => t.state === 'streaming').length;
-    const omitted = intervalEnd <= omitMs || wasInRampUp;
+    const omitted = intervalEnd <= omitMs;
 
     for (const t of threads) {
       t.tokensInInterval = 0;
     }
 
-    // Reset counters at ramp-up boundary AFTER capturing the boundary interval
-    if (rampUpJustEnded) {
-      log(`ramp-up complete after ${((now - clockStartTime) / 1000).toFixed(2)}s, resetting counters`);
-      phaseStartTime += intervalEnd;
-      nextIntervalIndex = 0;
-    } else {
-      nextIntervalIndex++;
-    }
+    nextIntervalIndex++;
 
     return {
       startTime: intervalStart,
@@ -96,13 +76,8 @@ export function createIntervalTracker(config: IntervalTrackerConfig, verbose = f
           log(`T${threadIndex} first-token (streaming=${threads.filter(t => t.state === 'streaming').length}/${config.threadCount})`);
           if (!clockStarted) {
             clockStarted = true;
-            clockStartTime = now;
             phaseStartTime = now;
-            if (rampUpMs > 0) {
-              log(`clock started on T${threadIndex} first-token, ramp-up ${(rampUpMs / 1000).toFixed(1)}s begins`);
-            } else {
-              log(`clock started on T${threadIndex} first-token`);
-            }
+            log(`clock started on T${threadIndex} first-token`);
           }
           break;
         case 'chunk':
@@ -122,7 +97,7 @@ export function createIntervalTracker(config: IntervalTrackerConfig, verbose = f
         log(`finalize: clock never started, no snapshots`);
         return [];
       }
-      log(`finalize: rampUpComplete=${rampUpComplete}, streaming=${threads.filter(t => t.state === 'streaming').length}, done=${threads.filter(t => t.state === 'done').length}, waiting=${threads.filter(t => t.state === 'waiting').length}`);
+      log(`finalize: streaming=${threads.filter(t => t.state === 'streaming').length}, done=${threads.filter(t => t.state === 'done').length}, waiting=${threads.filter(t => t.state === 'waiting').length}`);
 
       const snapshots: IntervalSnapshot[] = [];
 
@@ -146,7 +121,7 @@ export function createIntervalTracker(config: IntervalTrackerConfig, verbose = f
         const tokens = threads.reduce((sum, t) => sum + t.tokensInInterval, 0);
         const activeThreadCount = threads.filter(t => t.state === 'streaming').length;
         const duration = elapsed - partialStart;
-        const omitted = elapsed <= omitMs || !rampUpComplete;
+        const omitted = elapsed <= omitMs;
 
         snapshots.push({
           startTime: partialStart,

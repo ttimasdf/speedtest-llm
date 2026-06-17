@@ -25,7 +25,6 @@ function makeConfig(env: { baseUrl: string; apiKey: string; model: string }): Sp
     output: 'terminal',
     timeout: 30_000,
     verbose: false,
-    rampUp: 0,
     interval: 1,
     omit: 0,
     traceOutput: 'off',

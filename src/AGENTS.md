@@ -37,4 +37,4 @@ Source code for the speedtest-llm CLI. See root AGENTS.md for project convention
 - `interval-tracker.ts` omits intervals where no thread streamed (all `waiting` or all `done`). The formatter skips these silently.
 - `metrics.ts` `computeStats` returns zeroed `PercentileStats` for empty arrays instead of throwing. Callers should check `values.length` if zero is a meaningful signal.
 - `output.ts` handles both JSON and heatmap output. Heatmap cells use ANSI escape codes that won't render in JSON files; `output.ts` strips them for non-TTY.
-- Thread ramp-up (`config.rampUp`) delays each thread's spawn by `rampUp * 1000 * i` ms. Thread 0 starts immediately, thread N starts N intervals later.
+- Threads burst-start together for stress testing. Use `config.omit` for iperf-style pre-test omission.

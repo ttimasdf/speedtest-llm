@@ -1,4 +1,5 @@
 import type { SpeedTestConfig, StreamTraceEvent, TraceRecord } from './types.js';
+import { normalizeTokenUsage } from './token-usage.js';
 
 interface ThreadTraceState {
   readonly traceId: string;
@@ -225,6 +226,23 @@ export function createTraceCollector(config: SpeedTestConfig): TraceCollector {
           record.content_chars_total = state.totalChars;
           record.estimated_tokens_total = state.estimatedTokens;
           record.tokens_per_second = generationTime > 0 ? (tokens / generationTime) * 1000 : 0;
+          if (event.usage !== undefined) {
+            const usage = normalizeTokenUsage(event.usage);
+            record.usage = event.usage;
+            record.input_tokens = usage.inputTokens;
+            record.output_tokens = usage.outputTokens;
+            record.total_tokens = usage.totalTokens;
+            record.no_cache_tokens = usage.noCacheTokens;
+            record.cache_read_tokens = usage.cacheReadTokens;
+            record.cache_write_tokens = usage.cacheWriteTokens;
+            record.text_tokens = usage.textTokens;
+            record.reasoning_tokens = usage.reasoningTokens;
+          }
+          if (event.content !== undefined) {
+            record.content = event.content;
+            record.content_length = event.content.length;
+            record.content_bytes = new TextEncoder().encode(event.content).byteLength;
+          }
           break;
         }
         case 'stream_error':

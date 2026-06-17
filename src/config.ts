@@ -24,9 +24,8 @@ export function parseConfig(argv: string[]): SpeedTestConfig {
     .option('--output-file <path>', 'Output file path (for json output)')
     .option('--timeout <s>', 'Request timeout in seconds', '60')
     .option('--verbose', 'Enable verbose logging', false)
-    .option('--ramp-up <s>', 'Ramp-up period in seconds', '0')
     .option('-i, --interval <seconds>', 'Interval between snapshots in seconds', '1')
-    .option('--omit <seconds>', 'Omit initial seconds from results', '0')
+    .option('--omit <seconds>', 'Omit initial pre-test seconds from results', '0')
     .option('--trace-output <target>', 'Trace output: off, memory, file', 'off')
     .option('--trace-file <path>', 'Trace JSONL file path (for --trace-output file)', 'speedtest-llm-trace.jsonl')
     .option('--trace-include-content', 'Include streamed text content in trace records', false);
@@ -87,12 +86,6 @@ export function parseConfig(argv: string[]): SpeedTestConfig {
   }
   const timeout = timeoutSec * 1000;
 
-  const rampUp = parseFloat(opts.rampUp);
-  if (isNaN(rampUp) || rampUp < 0) {
-    console.error('Error: --ramp-up must be a non-negative number (seconds)');
-    process.exit(1);
-  }
-
   const interval = parseFloat(opts.interval);
   if (isNaN(interval) || interval <= 0) {
     console.error('Error: --interval must be a positive number (seconds)');
@@ -127,7 +120,6 @@ export function parseConfig(argv: string[]): SpeedTestConfig {
     outputFile: (output === 'json' && outputFile) ? outputFile : undefined,
     timeout,
     verbose: !!opts.verbose,
-    rampUp,
     interval,
     omit,
     traceOutput: traceOutput as TraceOutput,

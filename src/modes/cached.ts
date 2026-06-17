@@ -3,6 +3,7 @@ import type { MetricsCollector } from '../metrics.js';
 import type { LanguageModel } from 'ai';
 import type { ModeRunner } from './runner.js';
 import { streamText } from 'ai';
+import { formatTokenUsage, outputTokensFromUsage } from '../token-usage.js';
 
 export const cachedRunner: ModeRunner = {
   name: 'cached-long-context',
@@ -51,6 +52,7 @@ export const cachedRunner: ModeRunner = {
     let firstTokenRecorded = false;
     let streamTokenCount = 0;
     let chunkCount = 0;
+    let fullResponse = '';
 
     const result = streamText({
       model,
@@ -65,6 +67,7 @@ export const cachedRunner: ModeRunner = {
         }
         streamTokenCount += Math.max(1, Math.round(chunk.text.length / 4));
         chunkCount++;
+        fullResponse += chunk.text;
         if (!firstTokenRecorded) {
           collector.recordFirstToken(runId);
           firstTokenRecorded = true;
@@ -82,17 +85,15 @@ export const cachedRunner: ModeRunner = {
       for await (const _chunk of result.textStream) {
       }
 
+      const usage = await result.usage;
       let tokens = streamTokenCount;
       if (tokens === 0) {
-        const usage = await result.usage;
-        tokens =
-          typeof usage.outputTokens === 'number'
-            ? usage.outputTokens
-            : (usage.outputTokens as any)?.total ?? 0;
+        tokens = outputTokensFromUsage(usage);
       }
       collector.recordChunk(runId, tokens);
-      onTrace?.({ event: 'stream_end', tokens });
+      onTrace?.({ event: 'stream_end', tokens, content: fullResponse, usage });
       onStream?.('done');
+      vlog(`upstream usage: ${formatTokenUsage(usage)}`);
       vlog(`stream end: ${chunkCount} chunks, ~${tokens} tokens`);
     } catch (err) {
       onTrace?.({ event: 'stream_error', error: err });

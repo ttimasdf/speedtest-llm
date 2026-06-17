@@ -33,7 +33,6 @@ describe('parseConfig', () => {
     expect(cfg.output).toBe('terminal');
     expect(cfg.timeout).toBe(60000);
     expect(cfg.verbose).toBe(false);
-    expect(cfg.rampUp).toBe(0);
     expect(cfg.interval).toBe(1);
     expect(cfg.omit).toBe(0);
     expect(cfg.traceOutput).toBe('off');
@@ -55,7 +54,6 @@ describe('parseConfig', () => {
       '--output-file', 'out.json',
       '--timeout', '30',
       '--verbose',
-      '--ramp-up', '0.5',
       '--interval', '2',
       '--omit', '3',
       '--trace-output', 'file',
@@ -73,7 +71,6 @@ describe('parseConfig', () => {
     expect(cfg.output).toBe('json');
     expect(cfg.timeout).toBe(30000);
     expect(cfg.verbose).toBe(true);
-    expect(cfg.rampUp).toBe(0.5);
     expect(cfg.interval).toBe(2);
     expect(cfg.omit).toBe(3);
     expect(cfg.traceOutput).toBe('file');

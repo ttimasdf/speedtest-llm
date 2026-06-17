@@ -61,7 +61,7 @@ Metrics: TTFT, instruction following (OK/FAIL)
 | `--output-file` | path | — | JSON output path |
 | `--timeout` | number | `60000` | Request timeout (ms) |
 | `--verbose` | flag | `false` | Enable debug output |
-| `--ramp-up-ms` | number | `0` | Delay between thread starts |
+| `--omit` | number | `0` | Omit initial pre-test seconds from interval stats |
 
 Additional commands:
 ```bash

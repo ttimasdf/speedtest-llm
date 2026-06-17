@@ -15,7 +15,6 @@ function makeConfig(overrides: Partial<SpeedTestConfig> = {}): SpeedTestConfig {
     output: 'terminal',
     timeout: 60000,
     verbose: false,
-    rampUp: 0,
     interval: 1,
     omit: 0,
     traceOutput: 'memory',
@@ -31,7 +30,18 @@ describe('TraceCollector', () => {
     collector.record(0, { event: 'stream_start' });
     collector.record(0, { event: 'stream_first_chunk', content: 'hi' });
     collector.record(0, { event: 'stream_chunk', content: ' there' });
-    collector.record(0, { event: 'stream_end', tokens: 3 });
+    collector.record(0, {
+      event: 'stream_end',
+      tokens: 3,
+      content: 'hi there',
+      usage: {
+        inputTokens: 10,
+        outputTokens: 3,
+        totalTokens: 13,
+        inputTokenDetails: { noCacheTokens: 8, cacheReadTokens: 2, cacheWriteTokens: 1 },
+        outputTokenDetails: { textTokens: 3, reasoningTokens: 0 },
+      },
+    });
     await collector.flush();
 
     const records = collector.getRecords();
@@ -49,6 +59,12 @@ describe('TraceCollector', () => {
     expect(records[1].time_to_first_token).toBeGreaterThanOrEqual(0);
     expect(records[2].estimated_tokens_total).toBeGreaterThanOrEqual(2);
     expect(records[3].tokens).toBe(3);
+    expect(records[3].content).toBe('hi there');
+    expect(records[3].input_tokens).toBe(10);
+    expect(records[3].output_tokens).toBe(3);
+    expect(records[3].total_tokens).toBe(13);
+    expect(records[3].cache_read_tokens).toBe(2);
+    expect(records[3].cache_write_tokens).toBe(1);
     expect(records[1].content).toBe('hi');
   });
 
@@ -76,7 +92,7 @@ describe('TraceCollector', () => {
 
     collector.record(0, { event: 'stream_start' });
     collector.record(0, { event: 'stream_first_chunk', content: 'hello' });
-    collector.record(0, { event: 'stream_end', tokens: 1 });
+    collector.record(0, { event: 'stream_end', tokens: 1, content: 'hello', usage: { inputTokens: 2, outputTokens: 1, totalTokens: 3 } });
     await collector.flush();
 
     const text = await Bun.file(traceFile).text();
@@ -87,6 +103,8 @@ describe('TraceCollector', () => {
     expect(parsed[1].event).toBe('stream_first_chunk');
     expect(parsed[2].event).toBe('stream_end');
     expect(parsed[2].tokens).toBe(1);
+    expect(parsed[2].content).toBe('hello');
+    expect(parsed[2].input_tokens).toBe(2);
 
     await Bun.$`rm -f ${traceFile}`;
   });

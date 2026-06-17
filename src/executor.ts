@@ -10,33 +10,6 @@ export interface ExecuteOptions {
   onInterval?: (snapshot: IntervalSnapshot) => void;
 }
 
-function waitForRampDelay(ms: number, signal: AbortSignal): Promise<boolean> {
-  if (ms <= 0) return Promise.resolve(!signal.aborted);
-  if (signal.aborted) return Promise.resolve(false);
-
-  return new Promise(resolve => {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-    const cleanup = () => {
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
-      signal.removeEventListener('abort', onAbort);
-    };
-
-    const onAbort = () => {
-      cleanup();
-      resolve(false);
-    };
-
-    timeoutId = setTimeout(() => {
-      cleanup();
-      resolve(true);
-    }, ms);
-
-    signal.addEventListener('abort', onAbort, { once: true });
-    if (signal.aborted) onAbort();
-  });
-}
-
 function computeIntervalStats(intervals: readonly IntervalSnapshot[]): { intervalTps: PercentileStats; totalIntervals: number } {
   const nonOmitted = intervals.filter(i => !i.omitted);
   const tpsValues = nonOmitted.map(i => i.tps);
@@ -50,7 +23,7 @@ function computeIntervalStats(intervals: readonly IntervalSnapshot[]): { interva
 export async function executeParallel(config: SpeedTestConfig, options?: ExecuteOptions): Promise<SpeedTestResult> {
   const vlog = (msg: string) => { if (config.verbose) console.error(`[executor] ${msg}`); };
 
-  vlog(`starting: mode=${config.mode} threads=${config.threads} rampUp=${config.rampUp}s timeout=${config.timeout}ms interval=${config.interval}s omit=${config.omit}s`);
+  vlog(`starting: mode=${config.mode} threads=${config.threads} timeout=${config.timeout}ms interval=${config.interval}s omit=${config.omit}s`);
 
   const runner = getRunner(config.mode);
   const model = createProvider(config);
@@ -58,7 +31,6 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
   const tracker = createIntervalTracker({
     intervalMs: config.interval * 1000,
     omitMs: config.omit * 1000,
-    rampUpMs: config.rampUp * 1000,
     threadCount: config.threads,
   }, config.verbose);
   const traces = createTraceCollector(config);
@@ -81,16 +53,7 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
   const startTime = performance.now();
   let threadsSpawned = 0;
 
-  const rampUpMs = config.rampUp * 1000;
   const threadPromises = Array.from({ length: config.threads }, async (_, i) => {
-    const delayMs = rampUpMs > 0 && config.threads > 1 ? (rampUpMs * i) / (config.threads - 1) : 0;
-    if (delayMs > 0) {
-      vlog(`T${i} stagger-delay ${Math.round(delayMs)}ms`);
-      const delayCompleted = await waitForRampDelay(delayMs, controller.signal);
-      if (!delayCompleted) {
-        throw new Error('Thread start skipped: timeout reached during ramp-up');
-      }
-    }
     if (controller.signal.aborted) {
       throw new Error('Thread start skipped: timeout reached');
     }

@@ -3,6 +3,7 @@ import type { MetricsCollector } from '../metrics.js';
 import type { LanguageModel } from 'ai';
 import type { ModeRunner } from './runner.js';
 import { streamText } from 'ai';
+import { formatTokenUsage, outputTokensFromUsage } from '../token-usage.js';
 
 export const prefillRunner: ModeRunner = {
   name: 'prefill',
@@ -68,16 +69,14 @@ export const prefillRunner: ModeRunner = {
     try {
       for await (const _ of result.textStream) {
       }
+      const usage = await result.usage;
       let tokens = streamTokenCount;
       if (tokens === 0) {
-        const usage = await result.usage;
-        tokens =
-          typeof usage.outputTokens === 'number'
-            ? usage.outputTokens
-            : (usage.outputTokens as any)?.total ?? 0;
+        tokens = outputTokensFromUsage(usage);
       }
       collector.recordChunk(runId, tokens);
-      onTrace?.({ event: 'stream_end', tokens });
+      onTrace?.({ event: 'stream_end', tokens, content: fullResponse, usage });
+      vlog(`upstream usage: ${formatTokenUsage(usage)}`);
       vlog(`stream end: ${chunkCount} chunks, ~${tokens} tokens, response="${fullResponse.trim()}"`);
     } catch (err) {
       onTrace?.({ event: 'stream_error', error: err });

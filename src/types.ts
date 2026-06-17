@@ -16,7 +16,6 @@ export interface SpeedTestConfig {
   readonly outputFile?: string;
   readonly timeout: number;
   readonly verbose: boolean;
-  readonly rampUp: number;
   readonly interval: number;
   readonly omit: number;
   readonly traceOutput: TraceOutput;
@@ -67,7 +66,7 @@ export type StreamTraceEvent =
   | { readonly event: 'stream_start' }
   | { readonly event: 'stream_first_chunk'; readonly content?: string; readonly blockType?: string; readonly block?: unknown }
   | { readonly event: 'stream_chunk'; readonly content?: string; readonly blockType?: string; readonly block?: unknown }
-  | { readonly event: 'stream_end'; readonly tokens?: number }
+  | { readonly event: 'stream_end'; readonly tokens?: number; readonly content?: string; readonly usage?: unknown }
   | { readonly event: 'stream_error'; readonly error: unknown };
 
 export interface TraceRecord {
