@@ -20,13 +20,16 @@ export const freshRunner: ModeRunner = {
     onTrace?: (event: StreamTraceEvent) => void,
     signal?: AbortSignal,
   ): Promise<RunMetrics> {
+    const vlog = (msg: string) => { if (config.verbose) console.error(`[fresh] ${msg}`); };
     const collector = metricsFactory();
     const runId = collector.startRun();
 
     let firstChunkReceived = false;
     let streamTokenCount = 0;
+    let chunkCount = 0;
 
     onTrace?.({ event: 'stream_start' });
+    vlog('stream started, waiting for first chunk...');
 
     const result = streamText({
       model,
@@ -39,12 +42,14 @@ export const freshRunner: ModeRunner = {
           onTrace?.({ event: 'stream_chunk', blockType: chunk.type, block: chunk });
           return;
         }
+        chunkCount++;
         streamTokenCount += Math.max(1, Math.round(chunk.text.length / 4));
         if (!firstChunkReceived) {
           firstChunkReceived = true;
           collector.recordFirstToken(runId);
           onStream?.('first-token');
           onTrace?.({ event: 'stream_first_chunk', content: chunk.text, blockType: chunk.type });
+          vlog(`first chunk received`);
         } else {
           onTrace?.({ event: 'stream_chunk', content: chunk.text, blockType: chunk.type });
         }
@@ -67,8 +72,10 @@ export const freshRunner: ModeRunner = {
       }
       collector.recordChunk(runId, tokens);
       onTrace?.({ event: 'stream_end', tokens });
+      vlog(`stream end: ${chunkCount} chunks, ~${tokens} tokens`);
     } catch (err) {
       onTrace?.({ event: 'stream_error', error: err });
+      vlog(`stream error: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     return collector.finishRun(runId);

@@ -14,18 +14,22 @@ export interface MetricsCollector {
   finishRun(runId: string): RunMetrics;
 }
 
-export function createMetricsCollector(): MetricsCollector {
+export function createMetricsCollector(verbose = false): MetricsCollector {
   const runs = new Map<string, RunState>();
+  const log = (msg: string) => { if (verbose) console.error(`[metrics] ${msg}`); };
+  let runCounter = 0;
 
   return {
     startRun(): string {
       const runId = crypto.randomUUID();
+      runCounter++;
       runs.set(runId, {
         startTime: performance.now(),
         ttft: 0,
         totalTokens: 0,
         endTime: 0,
       });
+      log(`run #${runCounter} started ${runId.slice(0, 8)}`);
       return runId;
     },
 
@@ -33,6 +37,7 @@ export function createMetricsCollector(): MetricsCollector {
       const state = runs.get(runId);
       if (!state) throw new Error(`Unknown run: ${runId}`);
       state.ttft = performance.now() - state.startTime;
+      log(`run ${runId.slice(0, 8)} first-token: ${(state.ttft / 1000).toFixed(3)}s`);
     },
 
     recordChunk(runId: string, tokenCount: number): void {
@@ -49,6 +54,7 @@ export function createMetricsCollector(): MetricsCollector {
       const generationTime = totalTime - state.ttft;
       const tokensPerSecond = generationTime > 0 ? (state.totalTokens / generationTime) * 1000 : 0;
       runs.delete(runId);
+      log(`run ${runId.slice(0, 8)} finished: ttft=${(state.ttft/1000).toFixed(3)}s total=${(totalTime/1000).toFixed(3)}s tokens=${state.totalTokens} tok/s=${tokensPerSecond.toFixed(1)}`);
       return {
         ttft: state.ttft,
         totalTime,

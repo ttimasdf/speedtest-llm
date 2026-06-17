@@ -18,6 +18,7 @@ export const prefillRunner: ModeRunner = {
     onTrace?: (event: StreamTraceEvent) => void,
     signal?: AbortSignal,
   ): Promise<RunMetrics> {
+    const vlog = (msg: string) => { if (_config.verbose) console.error(`[prefill] ${msg}`); };
     const prompt =
       context +
       '\n\nINSTRUCTION: Reply with exactly the word "OK" and nothing else. No explanation, no prefix, no suffix — just "OK".';
@@ -29,8 +30,10 @@ export const prefillRunner: ModeRunner = {
     let fullResponse = '';
     let firstChunk = true;
     let streamTokenCount = 0;
+    let chunkCount = 0;
 
     onTrace?.({ event: 'stream_start' });
+    vlog('stream started, waiting for first chunk...');
 
     const result = streamText({
       model,
@@ -44,11 +47,13 @@ export const prefillRunner: ModeRunner = {
           return;
         }
         streamTokenCount += Math.max(1, Math.round(chunk.text.length / 4));
+        chunkCount++;
         if (firstChunk) {
           collector.recordFirstToken(runId);
           firstChunk = false;
           onStream?.('first-token');
           onTrace?.({ event: 'stream_first_chunk', content: chunk.text, blockType: chunk.type });
+          vlog(`first chunk received`);
         } else {
           onTrace?.({ event: 'stream_chunk', content: chunk.text, blockType: chunk.type });
         }
@@ -73,12 +78,15 @@ export const prefillRunner: ModeRunner = {
       }
       collector.recordChunk(runId, tokens);
       onTrace?.({ event: 'stream_end', tokens });
+      vlog(`stream end: ${chunkCount} chunks, ~${tokens} tokens, response="${fullResponse.trim()}"`);
     } catch (err) {
       onTrace?.({ event: 'stream_error', error: err });
+      vlog(`stream error: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     const runMetrics = collector.finishRun(runId);
     const instructionFollowed = fullResponse.trim() === 'OK';
+    vlog(`instruction followed: ${instructionFollowed}`);
 
     return { ...runMetrics, instructionFollowed };
   },

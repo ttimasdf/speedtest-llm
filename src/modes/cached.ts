@@ -17,11 +17,13 @@ export const cachedRunner: ModeRunner = {
     onTrace?: (event: StreamTraceEvent) => void,
     signal?: AbortSignal,
   ): Promise<RunMetrics> {
+    const vlog = (msg: string) => { if (config.verbose) console.error(`[cached] ${msg}`); };
     const prompt =
       context +
       '\n\nWrite a comprehensive, detailed essay about the history and evolution of computing, from the abacus to modern AI. Include specific dates, key figures, and technical milestones. Be thorough and expansive.';
     const messages = [{ role: 'user' as const, content: prompt }];
 
+    vlog('sending warmup request...');
     try {
       const warmup = streamText({
         model,
@@ -31,20 +33,24 @@ export const cachedRunner: ModeRunner = {
         abortSignal: signal,
       });
       for await (const _chunk of warmup.textStream) {}
+      vlog('warmup completed');
     } catch (err) {
       console.warn(
         'Warmup request failed (some endpoints may not support caching):',
         err instanceof Error ? err.message : String(err),
       );
+      vlog(`warmup failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     const collector = metricsFactory();
     const runId = collector.startRun();
 
     onTrace?.({ event: 'stream_start' });
+    vlog('measured stream started, waiting for first chunk...');
 
     let firstTokenRecorded = false;
     let streamTokenCount = 0;
+    let chunkCount = 0;
 
     const result = streamText({
       model,
@@ -58,11 +64,13 @@ export const cachedRunner: ModeRunner = {
           return;
         }
         streamTokenCount += Math.max(1, Math.round(chunk.text.length / 4));
+        chunkCount++;
         if (!firstTokenRecorded) {
           collector.recordFirstToken(runId);
           firstTokenRecorded = true;
           onStream?.('first-token');
           onTrace?.({ event: 'stream_first_chunk', content: chunk.text, blockType: chunk.type });
+          vlog(`first chunk received`);
         } else {
           onTrace?.({ event: 'stream_chunk', content: chunk.text, blockType: chunk.type });
         }
@@ -85,8 +93,10 @@ export const cachedRunner: ModeRunner = {
       collector.recordChunk(runId, tokens);
       onTrace?.({ event: 'stream_end', tokens });
       onStream?.('done');
+      vlog(`stream end: ${chunkCount} chunks, ~${tokens} tokens`);
     } catch (err) {
       onTrace?.({ event: 'stream_error', error: err });
+      vlog(`stream error: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     return collector.finishRun(runId);
