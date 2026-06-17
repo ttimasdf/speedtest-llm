@@ -10,6 +10,33 @@ export interface ExecuteOptions {
   onInterval?: (snapshot: IntervalSnapshot) => void;
 }
 
+function waitForRampDelay(ms: number, signal: AbortSignal): Promise<boolean> {
+  if (ms <= 0) return Promise.resolve(!signal.aborted);
+  if (signal.aborted) return Promise.resolve(false);
+
+  return new Promise(resolve => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const cleanup = () => {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      signal.removeEventListener('abort', onAbort);
+    };
+
+    const onAbort = () => {
+      cleanup();
+      resolve(false);
+    };
+
+    timeoutId = setTimeout(() => {
+      cleanup();
+      resolve(true);
+    }, ms);
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+}
+
 function computeIntervalStats(intervals: readonly IntervalSnapshot[]): { intervalTps: PercentileStats; totalIntervals: number } {
   const nonOmitted = intervals.filter(i => !i.omitted);
   const tpsValues = nonOmitted.map(i => i.tps);
@@ -21,14 +48,19 @@ function computeIntervalStats(intervals: readonly IntervalSnapshot[]): { interva
 }
 
 export async function executeParallel(config: SpeedTestConfig, options?: ExecuteOptions): Promise<SpeedTestResult> {
+  const vlog = (msg: string) => { if (config.verbose) console.error(`[executor] ${msg}`); };
+
+  vlog(`starting: mode=${config.mode} threads=${config.threads} rampUp=${config.rampUp}s timeout=${config.timeout}ms interval=${config.interval}s omit=${config.omit}s`);
+
   const runner = getRunner(config.mode);
   const model = createProvider(config);
   const context = await loadContext(config.contextFile);
   const tracker = createIntervalTracker({
     intervalMs: config.interval * 1000,
     omitMs: config.omit * 1000,
+    rampUpMs: config.rampUp * 1000,
     threadCount: config.threads,
-  });
+  }, config.verbose);
   const traces = createTraceCollector(config);
 
   const allIntervals: IntervalSnapshot[] = [];
@@ -41,29 +73,54 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), config.timeout);
+  const timeoutId = setTimeout(() => {
+    vlog(`timeout reached (${config.timeout}ms), aborting all threads`);
+    controller.abort();
+  }, config.timeout);
 
+  const startTime = performance.now();
+  let threadsSpawned = 0;
+
+  const rampUpMs = config.rampUp * 1000;
   const threadPromises = Array.from({ length: config.threads }, async (_, i) => {
-    if (config.rampUp > 0 && i > 0) {
-      await new Promise(resolve => setTimeout(resolve, config.rampUp * 1000 * i));
+    const delayMs = rampUpMs > 0 && config.threads > 1 ? (rampUpMs * i) / (config.threads - 1) : 0;
+    if (delayMs > 0) {
+      vlog(`T${i} stagger-delay ${Math.round(delayMs)}ms`);
+      const delayCompleted = await waitForRampDelay(delayMs, controller.signal);
+      if (!delayCompleted) {
+        throw new Error('Thread start skipped: timeout reached during ramp-up');
+      }
     }
+    if (controller.signal.aborted) {
+      throw new Error('Thread start skipped: timeout reached');
+    }
+    threadsSpawned++;
+    vlog(`T${i} spawned (${threadsSpawned}/${config.threads} total started, +${((performance.now() - startTime) / 1000).toFixed(2)}s)`);
 
     // Each thread gets its own collector — not shared, not thread-safe
-    const metricsFactory = () => createMetricsCollector();
+    const metricsFactory = () => createMetricsCollector(config.verbose);
 
     const onStream = (event: 'first-token' | 'chunk' | 'done') => {
-      tracker.onStreamEvent(i, event);
+      tracker.onStreamEvent(i, event, performance.now());
     };
 
-    return runner.run(
-      config,
-      model,
-      metricsFactory,
-      context,
-      onStream,
-      (event) => traces.record(i, event),
-      controller.signal,
-    );
+    vlog(`T${i} starting run`);
+    try {
+      const result = await runner.run(
+        config,
+        model,
+        metricsFactory,
+        context,
+        onStream,
+        (event) => traces.record(i, event),
+        controller.signal,
+      );
+      vlog(`T${i} completed: ttft=${(result.ttft / 1000).toFixed(3)}s tok/s=${result.tokensPerSecond.toFixed(1)} tokens=${result.totalTokens}`);
+      return result;
+    } catch (err) {
+      vlog(`T${i} error: ${err instanceof Error ? err.message : String(err)}`);
+      throw err;
+    }
   });
 
   const tickInterval = setInterval(() => {
@@ -74,14 +131,19 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
     }
   }, 100);
 
+  vlog('all threads spawned, waiting for completion...');
   const outcomes = await Promise.allSettled(threadPromises);
   await traces.flush();
 
   clearInterval(tickInterval);
   clearTimeout(timeoutId);
 
+  const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+  vlog(`all threads settled in ${elapsed}s`);
+
   const now = performance.now();
   const remainingSnapshots = tracker.finalize(now);
+  vlog(`finalize produced ${remainingSnapshots.length} snapshots`);
   for (const snapshot of remainingSnapshots) {
     captureSnapshot(snapshot);
   }
@@ -89,13 +151,14 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
   const successes: RunMetrics[] = [];
   const errorMessages: string[] = [];
 
-  for (const outcome of outcomes) {
+  for (let i = 0; i < outcomes.length; i++) {
+    const outcome = outcomes[i];
     if (outcome.status === 'fulfilled') {
       successes.push(outcome.value);
     } else {
-      errorMessages.push(
-        outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),
-      );
+      const msg = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+      vlog(`T${i} failed: ${msg}`);
+      errorMessages.push(msg);
     }
   }
 

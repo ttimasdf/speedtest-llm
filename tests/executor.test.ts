@@ -123,4 +123,49 @@ describe('executeParallel', () => {
     expect(result.timestamp).toBeTruthy();
     expect(new Date(result.timestamp).toISOString()).toBe(result.timestamp);
   });
+
+  it('spreads thread starts across the total ramp-up period', async () => {
+    const starts: number[] = [];
+    mockRun.mockImplementation(async () => {
+      starts.push(performance.now());
+      return {
+        ttft: 10,
+        totalTime: 100,
+        totalTokens: 50,
+        tokensPerSecond: 500,
+      };
+    });
+
+    await executeParallel(makeConfig({ threads: 3, rampUp: 0.1, timeout: 1000 }));
+
+    expect(starts).toHaveLength(3);
+    expect(starts[2] - starts[0]).toBeLessThan(170);
+  });
+
+  it('does not wait for pending ramp-up sleeps after timeout', async () => {
+    const success: RunMetrics = {
+      ttft: 0,
+      totalTime: 30,
+      totalTokens: 0,
+      tokensPerSecond: 0,
+    };
+
+    mockRun.mockImplementation(async (...args: unknown[]) => {
+      const signal = args[6] as AbortSignal | undefined;
+      if (signal?.aborted) return success;
+
+      return new Promise<RunMetrics>(resolve => {
+        signal?.addEventListener('abort', () => resolve(success), { once: true });
+      });
+    });
+
+    const start = performance.now();
+    const result = await executeParallel(makeConfig({ threads: 3, rampUp: 1, timeout: 30 }));
+    const elapsed = performance.now() - start;
+
+    expect(elapsed).toBeLessThan(250);
+    expect(mockRun).toHaveBeenCalledTimes(1);
+    expect(result.aggregate.successCount).toBe(1);
+    expect(result.aggregate.errorCount).toBe(2);
+  });
 });
