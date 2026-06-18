@@ -10,13 +10,30 @@ export interface ExecuteOptions {
   onInterval?: (snapshot: IntervalSnapshot) => void;
 }
 
-function computeIntervalStats(intervals: readonly IntervalSnapshot[]): { intervalTps: PercentileStats; totalIntervals: number } {
+function computeIntervalStats(intervals: readonly IntervalSnapshot[]): {
+  intervalTps: PercentileStats;
+  totalIntervals: number;
+  totalTokensPerSecond: number;
+  measuredDuration: number;
+  measuredTokens: number;
+  measuredStartTime: number;
+  measuredEndTime: number;
+} {
   const nonOmitted = intervals.filter(i => !i.omitted);
   const tpsValues = nonOmitted.map(i => i.tps);
+  const measuredDuration = nonOmitted.reduce((sum, i) => sum + Math.max(0, i.endTime - i.startTime), 0);
+  const measuredTokens = nonOmitted.reduce((sum, i) => sum + i.tokens, 0);
+  const measuredStartTime = nonOmitted[0]?.startTime ?? 0;
+  const measuredEndTime = nonOmitted[nonOmitted.length - 1]?.endTime ?? 0;
 
   return {
     intervalTps: tpsValues.length > 0 ? computeStats(tpsValues) : { min: 0, max: 0, avg: 0, p50: 0, p95: 0, p99: 0 },
     totalIntervals: intervals.length,
+    totalTokensPerSecond: measuredDuration > 0 ? (measuredTokens / measuredDuration) * 1000 : 0,
+    measuredDuration,
+    measuredTokens,
+    measuredStartTime,
+    measuredEndTime,
   };
 }
 
@@ -63,8 +80,8 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
     // Each thread gets its own collector — not shared, not thread-safe
     const metricsFactory = () => createMetricsCollector(config.verbose);
 
-    const onStream = (event: 'first-token' | 'chunk' | 'done') => {
-      tracker.onStreamEvent(i, event, performance.now());
+    const onStream = (event: 'first-token' | 'chunk' | 'done', tokenCount?: number) => {
+      tracker.onStreamEvent(i, event, performance.now(), tokenCount);
     };
 
     vlog(`T${i} starting run`);
@@ -125,7 +142,7 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
     }
   }
 
-  const { intervalTps, totalIntervals } = computeIntervalStats(allIntervals);
+  const { intervalTps, totalIntervals, totalTokensPerSecond, measuredDuration, measuredTokens, measuredStartTime, measuredEndTime } = computeIntervalStats(allIntervals);
 
   const aggregate: AggregateMetrics = successes.length > 0
     ? {
@@ -135,12 +152,22 @@ export async function executeParallel(config: SpeedTestConfig, options?: Execute
         errorCount: errorMessages.length,
         intervalTps,
         totalIntervals,
+        totalTokensPerSecond,
+        measuredDuration,
+        measuredTokens,
+        measuredStartTime,
+        measuredEndTime,
       }
     : {
         ttft: { min: 0, max: 0, avg: 0, p50: 0, p95: 0, p99: 0 },
         tokensPerSecond: { min: 0, max: 0, avg: 0, p50: 0, p95: 0, p99: 0 },
         totalTime: { min: 0, max: 0, avg: 0, p50: 0, p95: 0, p99: 0 },
         totalTokens: 0,
+        totalTokensPerSecond,
+        measuredDuration,
+        measuredTokens,
+        measuredStartTime,
+        measuredEndTime,
         threadCount: config.threads,
         successCount: 0,
         errorCount: errorMessages.length,

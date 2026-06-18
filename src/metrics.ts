@@ -91,6 +91,11 @@ export function computeAggregates(metrics: readonly RunMetrics[]): AggregateMetr
       tokensPerSecond: { min: 0, max: 0, avg: 0, p50: 0, p95: 0, p99: 0 },
       totalTime: { min: 0, max: 0, avg: 0, p50: 0, p95: 0, p99: 0 },
       totalTokens: 0,
+      totalTokensPerSecond: 0,
+      measuredDuration: 0,
+      measuredTokens: 0,
+      measuredStartTime: 0,
+      measuredEndTime: 0,
       threadCount: 0,
       successCount: 0,
       errorCount: 0,
@@ -101,12 +106,18 @@ export function computeAggregates(metrics: readonly RunMetrics[]): AggregateMetr
   const tpsValues = metrics.map((m) => m.tokensPerSecond);
   const totalTimeValues = metrics.map((m) => m.totalTime);
   const totalTokens = metrics.reduce((acc, m) => acc + m.totalTokens, 0);
+  const maxTotalTime = Math.max(...totalTimeValues);
 
   return {
     ttft: computeStats(ttftValues),
     tokensPerSecond: computeStats(tpsValues),
     totalTime: computeStats(totalTimeValues),
     totalTokens,
+    totalTokensPerSecond: maxTotalTime > 0 ? (totalTokens / maxTotalTime) * 1000 : 0,
+    measuredDuration: maxTotalTime,
+    measuredTokens: totalTokens,
+    measuredStartTime: 0,
+    measuredEndTime: maxTotalTime,
     threadCount: metrics.length,
     successCount: metrics.length,
     errorCount: 0,

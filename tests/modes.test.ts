@@ -2,6 +2,7 @@ import { describe, it, expect, mock, beforeEach } from 'bun:test';
 
 let mockUsageOutputTokens: number | undefined = 100;
 let mockStreamChunks: string[] = ['hello', ' world'];
+let mockStreamErrorAfterChunks: number | undefined;
 
 mock.module('ai', () => ({
   streamText: (opts: any) => {
@@ -9,12 +10,17 @@ mock.module('ai', () => ({
 
     function createStream() {
       return (async function* () {
+        let emitted = 0;
         for (const text of mockStreamChunks) {
           const chunk = { type: 'text-delta', text };
           if (opts.onChunk) {
             opts.onChunk({ chunk });
           }
+          emitted++;
           yield chunk;
+          if (mockStreamErrorAfterChunks !== undefined && emitted >= mockStreamErrorAfterChunks) {
+            throw new Error('stream aborted');
+          }
         }
         if (opts.onFinish) {
           opts.onFinish({ totalUsage: usage, usage });
@@ -67,6 +73,7 @@ describe('Mode: fresh', () => {
   beforeEach(() => {
     mockUsageOutputTokens = 100;
     mockStreamChunks = ['hello', ' world'];
+    mockStreamErrorAfterChunks = undefined;
   });
 
   it('uses prompt (not messages), records metrics from stream chunks', async () => {
@@ -98,12 +105,28 @@ describe('Mode: fresh', () => {
 
     expect(result.totalTokens).toBe(100);
   });
+
+  it('keeps partial token count when a stream is interrupted', async () => {
+    mockStreamChunks = ['partial output'];
+    mockStreamErrorAfterChunks = 1;
+    const config = makeConfig();
+    const result = await freshRunner.run(
+      config,
+      mockModel,
+      () => createMetricsCollector(),
+      'unused context',
+    );
+
+    expect(result.totalTokens).toBe(4);
+    expect(result.tokensPerSecond).toBeGreaterThanOrEqual(0);
+  });
 });
 
 describe('Mode: cached', () => {
   beforeEach(() => {
     mockUsageOutputTokens = 200;
     mockStreamChunks = ['cached', ' response'];
+    mockStreamErrorAfterChunks = undefined;
   });
 
   it('sends two requests (warmup + measured), metrics from second only', async () => {
@@ -126,6 +149,7 @@ describe('Mode: prefill', () => {
   beforeEach(() => {
     mockUsageOutputTokens = 5;
     mockStreamChunks = ['O', 'K'];
+    mockStreamErrorAfterChunks = undefined;
   });
 
   it('uses maxOutputTokens=10, measures TTFT, validates instruction', async () => {

@@ -130,6 +130,8 @@ describe('Integration: iperf3-style output', () => {
     expect(result.intervals!.length).toBeGreaterThanOrEqual(2);
     expect(result.threadStates).toBeDefined();
     expect(result.threadStates!.length).toBeGreaterThanOrEqual(2);
+    expect(result.aggregate.totalTokensPerSecond).toBeGreaterThan(0);
+    expect(result.aggregate.measuredDuration).toBeGreaterThan(0);
 
     const heatmapCells = convertToHeatmapCells(result);
     const heatmap = renderHeatmap(heatmapCells, 40, true);

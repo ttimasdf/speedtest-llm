@@ -54,6 +54,9 @@ describe('ThreadStreamState', () => {
       state: 'waiting',
       ttft: null,
       tokensInInterval: 0,
+      totalTokens: 0,
+      activeTime: 0,
+      tokensPerSecond: 0,
     };
     expect(state.threadId).toBe(1);
     expect(state.state).toBe('waiting');
@@ -67,6 +70,9 @@ describe('ThreadStreamState', () => {
       state: 'streaming',
       ttft: 150,
       tokensInInterval: 75,
+      totalTokens: 75,
+      activeTime: 1000,
+      tokensPerSecond: 75,
     };
     expect(state.state).toBe('streaming');
     expect(state.ttft).toBe(150);
@@ -79,6 +85,9 @@ describe('ThreadStreamState', () => {
       state: 'done',
       ttft: 200,
       tokensInInterval: 500,
+      totalTokens: 500,
+      activeTime: 1000,
+      tokensPerSecond: 500,
     };
     expect(state.state).toBe('done');
     expect(state.tokensInInterval).toBe(500);
@@ -192,6 +201,11 @@ describe('SpeedTestResult extension', () => {
         tokensPerSecond: { min: 50, max: 50, avg: 50, p50: 50, p95: 50, p99: 50 },
         totalTime: { min: 2000, max: 2000, avg: 2000, p50: 2000, p95: 2000, p99: 2000 },
         totalTokens: 100,
+        totalTokensPerSecond: 50,
+        measuredDuration: 2000,
+        measuredTokens: 100,
+        measuredStartTime: 0,
+        measuredEndTime: 2000,
         threadCount: 1,
         successCount: 1,
         errorCount: 0,
@@ -242,6 +256,11 @@ describe('AggregateMetrics extension', () => {
       tokensPerSecond: { min: 100, max: 500, avg: 300, p50: 300, p95: 450, p99: 490 },
       totalTime: { min: 1000, max: 5000, avg: 3000, p50: 3000, p95: 4500, p99: 4900 },
       totalTokens: 1000,
+      totalTokensPerSecond: 310,
+      measuredDuration: 3225,
+      measuredTokens: 1000,
+      measuredStartTime: 0,
+      measuredEndTime: 3225,
       threadCount: 5,
       successCount: 5,
       errorCount: 0,

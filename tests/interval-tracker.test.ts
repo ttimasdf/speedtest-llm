@@ -36,6 +36,17 @@ describe('IntervalTracker', () => {
     expect(snapshot!.tokens).toBe(3);
   });
 
+  it('uses chunk tokenCount when provided', () => {
+    const tracker = createIntervalTracker({ intervalMs: 1000, omitMs: 0, threadCount: 1 });
+
+    tracker.onStreamEvent(0, 'first-token');
+    tracker.onStreamEvent(0, 'chunk', 100, 7);
+    tracker.onStreamEvent(0, 'chunk', 200, 3);
+
+    const snapshot = tracker.tick(1000);
+    expect(snapshot!.tokens).toBe(10);
+  });
+
   it('marks omitted intervals when end time falls within omitMs', () => {
     const tracker = createIntervalTracker({ intervalMs: 1000, omitMs: 2000, threadCount: 1 });
 
@@ -130,6 +141,20 @@ describe('IntervalTracker', () => {
     expect(snapshots[1].startTime).toBe(2000);
     expect(snapshots[1].endTime).toBe(2500);
     expect(snapshots[1].tokens).toBe(0);
+  });
+
+  it('final state exposes cumulative per-thread TPS for interrupted streams', () => {
+    const tracker = createIntervalTracker({ intervalMs: 1000, omitMs: 0, threadCount: 1 });
+
+    tracker.onStreamEvent(0, 'first-token', 1000);
+    tracker.onStreamEvent(0, 'chunk', 1500, 25);
+    tracker.finalize(2000);
+
+    const state = tracker.getThreadStates()[0];
+    expect(state.state).toBe('streaming');
+    expect(state.totalTokens).toBe(25);
+    expect(state.activeTime).toBe(1000);
+    expect(state.tokensPerSecond).toBe(25);
   });
 
   it('finalize during omitted pre-test marks partial as omitted', () => {

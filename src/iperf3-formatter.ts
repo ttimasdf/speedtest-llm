@@ -73,12 +73,22 @@ export function formatSummaryLine(
   aggregate: AggregateMetrics,
   totalIntervals: number,
 ): string {
-  const configInterval = totalIntervals > 0 ? aggregate.totalIntervals : 1;
-  const totalDuration = totalIntervals;
-  const interval = `0.00-${totalDuration.toFixed(2)}s`;
-  const tokens = `~${aggregate.totalTokens}`;
-  const avgTps =
-    totalDuration > 0
+  const measuredDuration = aggregate.measuredDuration ?? 0;
+  const measuredTokensValue = aggregate.measuredTokens ?? aggregate.totalTokens;
+  const measuredStart = aggregate.measuredStartTime ?? 0;
+  const measuredEnd = aggregate.measuredEndTime ?? measuredDuration;
+  const totalTps = aggregate.totalTokensPerSecond ?? 0;
+  const totalDuration = measuredDuration > 0
+    ? measuredDuration / 1000
+    : totalIntervals;
+  const interval = measuredDuration > 0
+    ? `${(measuredStart / 1000).toFixed(2)}-${(measuredEnd / 1000).toFixed(2)}s`
+    : `0.00-${totalDuration.toFixed(2)}s`;
+  const measuredTokens = measuredDuration > 0 ? measuredTokensValue : aggregate.totalTokens;
+  const tokens = `~${measuredTokens}`;
+  const avgTps = measuredDuration > 0
+    ? totalTps.toFixed(1)
+    : totalDuration > 0
       ? (aggregate.totalTokens / totalDuration).toFixed(1)
       : '0.0';
   const threads = `${aggregate.threadCount}/${aggregate.threadCount}`;
@@ -114,6 +124,12 @@ export function formatDetailedStats(aggregate: AggregateMetrics): string {
   lines.push('--- Detailed Stats ---');
   lines.push(formatPercentileLine('TTFT:', aggregate.ttft, 's', 6, 1000));
   lines.push(formatPercentileLine('tok/s:', aggregate.tokensPerSecond, '', 6));
+  const totalTps = aggregate.totalTokensPerSecond ?? 0;
+  const measuredTokens = aggregate.measuredTokens ?? aggregate.totalTokens;
+  const measuredDuration = aggregate.measuredDuration ?? 0;
+  const measuredStart = aggregate.measuredStartTime ?? 0;
+  const measuredEnd = aggregate.measuredEndTime ?? measuredDuration;
+  lines.push(`Total tok/s:  ${totalTps.toFixed(2)} (${measuredTokens} tokens / ${(measuredDuration / 1000).toFixed(2)}s measured, ${(measuredStart / 1000).toFixed(2)}-${(measuredEnd / 1000).toFixed(2)}s)`);
   return lines.join('\n');
 }
 

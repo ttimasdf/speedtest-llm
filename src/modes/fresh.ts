@@ -17,7 +17,7 @@ export const freshRunner: ModeRunner = {
     model: LanguageModel,
     metricsFactory: () => MetricsCollector,
     _context: string,
-    onStream?: (event: 'first-token' | 'chunk' | 'done') => void,
+    onStream?: (event: 'first-token' | 'chunk' | 'done', tokenCount?: number) => void,
     onTrace?: (event: StreamTraceEvent) => void,
     signal?: AbortSignal,
   ): Promise<RunMetrics> {
@@ -45,7 +45,9 @@ export const freshRunner: ModeRunner = {
           return;
         }
         chunkCount++;
-        streamTokenCount += Math.max(1, Math.round(chunk.text.length / 4));
+        const tokenDelta = Math.max(1, Math.round(chunk.text.length / 4));
+        streamTokenCount += tokenDelta;
+        collector.recordChunk(runId, tokenDelta);
         fullResponse += chunk.text;
         if (!firstChunkReceived) {
           firstChunkReceived = true;
@@ -56,7 +58,7 @@ export const freshRunner: ModeRunner = {
         } else {
           onTrace?.({ event: 'stream_chunk', content: chunk.text, blockType: chunk.type });
         }
-        onStream?.('chunk');
+        onStream?.('chunk', tokenDelta);
       },
       onFinish: () => {
         onStream?.('done');
@@ -69,8 +71,8 @@ export const freshRunner: ModeRunner = {
       let tokens = streamTokenCount;
       if (tokens === 0) {
         tokens = outputTokensFromUsage(usage);
+        collector.recordChunk(runId, tokens);
       }
-      collector.recordChunk(runId, tokens);
       onTrace?.({ event: 'stream_end', tokens, content: fullResponse, usage });
       vlog(`upstream usage: ${formatTokenUsage(usage)}`);
       vlog(`stream end: ${chunkCount} chunks, ~${tokens} tokens`);

@@ -51,8 +51,13 @@ export interface IntervalSnapshot {
 }
 
 export interface ThreadStreamState {
+  readonly threadId: number;
   readonly state: 'waiting' | 'streaming' | 'done';
+  readonly ttft: number | null;
   readonly tokensInInterval: number;
+  readonly totalTokens: number;
+  readonly activeTime: number;
+  readonly tokensPerSecond: number;
 }
 
 export interface HeatmapCell {
@@ -94,6 +99,11 @@ export interface AggregateMetrics {
   readonly tokensPerSecond: PercentileStats;
   readonly totalTime: PercentileStats;
   readonly totalTokens: number;
+  readonly totalTokensPerSecond: number;
+  readonly measuredDuration: number;
+  readonly measuredTokens: number;
+  readonly measuredStartTime: number;
+  readonly measuredEndTime: number;
   readonly threadCount: number;
   readonly successCount: number;
   readonly errorCount: number;
